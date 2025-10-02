@@ -1,7 +1,21 @@
-import { Plugin, Notice, WorkspaceLeaf } from 'obsidian';
+import { Plugin, Notice, WorkspaceLeaf, TFile } from 'obsidian';
 import { AIRecordingView, AI_RECORDING_VIEW_TYPE } from './ai-recording-view';
 
 export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED';
+
+export interface RecordingMetadata {
+	id: string;
+	title: string;
+	date: string;
+	duration: number;
+	status: 'pending' | 'processing' | 'completed' | 'error';
+	audioFile?: string;
+	transcriptFile?: string;
+	summaryFile?: string;
+	segments: Array<{start: number, end: number}>;
+	createdAt: number;
+	updatedAt: number;
+}
 
 export default class AIRecordingPlugin extends Plugin {
 	sidebar: WorkspaceLeaf | null = null;
@@ -17,10 +31,15 @@ export default class AIRecordingPlugin extends Plugin {
 	} | null = null;
 	mediaRecorder: MediaRecorder | null = null;
 	audioStream: MediaStream | null = null;
+	recordingsIndex: RecordingMetadata[] = [];
+	recordingsFolder: string = 'AI Recordings';
 
 	async onload() {
 		console.log('Plugin AI Recording chargé');
 		new Notice('Plugin AI Recording chargé avec succès');
+
+		// Charger l'index des enregistrements
+		await this.loadRecordingsIndex();
 
 		// Enregistrer la vue personnalisée
 		this.registerView(AI_RECORDING_VIEW_TYPE, (leaf) => {
@@ -194,7 +213,7 @@ export default class AIRecordingPlugin extends Plugin {
 		}
 	}
 
-	finishRecording() {
+	async finishRecording() {
 		if (this.mediaRecorder && this.currentRecording) {
 			// Arrêter l'enregistrement
 			if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
@@ -206,6 +225,9 @@ export default class AIRecordingPlugin extends Plugin {
 				this.audioStream.getTracks().forEach(track => track.stop());
 				this.audioStream = null;
 			}
+			
+			// Sauvegarder l'enregistrement
+			await this.saveRecording();
 			
 			// Marquer l'enregistrement comme terminé
 			new Notice('Enregistrement terminé et sauvegardé');
@@ -277,6 +299,172 @@ export default class AIRecordingPlugin extends Plugin {
 		const now = new Date();
 		const elapsed = now.getTime() - this.currentRecording.startTime.getTime() - this.currentRecording.pausedTime;
 		return Math.max(0, elapsed);
+	}
+
+	async loadRecordingsIndex() {
+		try {
+			const indexFile = `${this.recordingsFolder}/recordings-index.json`;
+			const file = this.app.vault.getAbstractFileByPath(indexFile);
+			
+			if (file && file instanceof TFile) {
+				const content = await this.app.vault.read(file);
+				this.recordingsIndex = JSON.parse(content);
+			} else {
+				this.recordingsIndex = [];
+			}
+		} catch (error) {
+			console.error('Erreur lors du chargement de l\'index:', error);
+			this.recordingsIndex = [];
+		}
+	}
+
+	async saveRecordingsIndex() {
+		try {
+			// Créer le dossier s'il n'existe pas
+			await this.ensureRecordingsFolder();
+			
+			const indexFile = `${this.recordingsFolder}/recordings-index.json`;
+			const content = JSON.stringify(this.recordingsIndex, null, 2);
+			
+			const file = this.app.vault.getAbstractFileByPath(indexFile);
+			if (file && file instanceof TFile) {
+				await this.app.vault.modify(file, content);
+			} else {
+				await this.app.vault.create(indexFile, content);
+			}
+		} catch (error) {
+			console.error('Erreur lors de la sauvegarde de l\'index:', error);
+		}
+	}
+
+	async ensureRecordingsFolder() {
+		const folder = this.app.vault.getAbstractFileByPath(this.recordingsFolder);
+		if (!folder) {
+			await this.app.vault.createFolder(this.recordingsFolder);
+		}
+	}
+
+	async saveRecording() {
+		if (!this.currentRecording || !this.currentRecording.audioBlob) {
+			console.error('Aucun enregistrement à sauvegarder');
+			return;
+		}
+
+		try {
+			// Créer le dossier s'il n'existe pas
+			await this.ensureRecordingsFolder();
+			
+			// Générer les noms de fichiers
+			const date = new Date();
+			const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+			const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+			const baseName = `Recording_${dateStr}_${timeStr}`;
+			
+			// Créer le dossier par date
+			const dateFolder = `${this.recordingsFolder}/${dateStr}`;
+			await this.ensureDateFolder(dateFolder);
+			
+			// Sauvegarder le fichier audio
+			const audioFileName = `${baseName}.webm`;
+			const audioPath = `${dateFolder}/${audioFileName}`;
+			
+			// Découper le fichier si nécessaire
+			const audioBlobs = await this.chunkAudioIfNeeded(this.currentRecording.audioBlob);
+			
+			if (audioBlobs.length === 1) {
+				// Fichier unique
+				await this.app.vault.createBinary(audioPath, await audioBlobs[0].arrayBuffer());
+			} else {
+				// Fichiers multiples
+				for (let i = 0; i < audioBlobs.length; i++) {
+					const chunkPath = `${dateFolder}/${baseName}_part${i + 1}.webm`;
+					await this.app.vault.createBinary(chunkPath, await audioBlobs[i].arrayBuffer());
+				}
+			}
+			
+			// Créer les métadonnées
+			const metadata: RecordingMetadata = {
+				id: this.currentRecording.id,
+				title: `Enregistrement ${dateStr} ${timeStr}`,
+				date: dateStr,
+				duration: this.getRecordingDuration(),
+				status: 'completed',
+				audioFile: audioPath,
+				segments: this.currentRecording.segments,
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			};
+			
+			// Ajouter à l'index
+			this.recordingsIndex.unshift(metadata); // Ajouter au début (plus récent)
+			
+			// Sauvegarder l'index
+			await this.saveRecordingsIndex();
+			
+			console.log('Enregistrement sauvegardé:', metadata);
+			
+		} catch (error) {
+			console.error('Erreur lors de la sauvegarde:', error);
+			new Notice('Erreur lors de la sauvegarde de l\'enregistrement');
+		}
+	}
+
+	async ensureDateFolder(dateFolder: string) {
+		const folder = this.app.vault.getAbstractFileByPath(dateFolder);
+		if (!folder) {
+			await this.app.vault.createFolder(dateFolder);
+		}
+	}
+
+	async chunkAudioIfNeeded(audioBlob: Blob): Promise<Blob[]> {
+		const maxSize = 25 * 1024 * 1024; // 25MB limite
+		
+		if (audioBlob.size <= maxSize) {
+			return [audioBlob];
+		}
+		
+		// Pour l'instant, on retourne le blob entier
+		// TODO: Implémenter le découpage réel des fichiers audio
+		console.warn('Fichier audio volumineux détecté:', audioBlob.size, 'bytes');
+		return [audioBlob];
+	}
+
+	getRecordingsIndex(): RecordingMetadata[] {
+		return this.recordingsIndex;
+	}
+
+	async deleteRecordingFromIndex(recordingId: string) {
+		try {
+			// Trouver l'enregistrement dans l'index
+			const recordingIndex = this.recordingsIndex.findIndex(r => r.id === recordingId);
+			if (recordingIndex === -1) {
+				console.error('Enregistrement non trouvé:', recordingId);
+				return;
+			}
+			
+			const recording = this.recordingsIndex[recordingIndex];
+			
+			// Supprimer le fichier audio
+			if (recording.audioFile) {
+				const audioFile = this.app.vault.getAbstractFileByPath(recording.audioFile);
+				if (audioFile) {
+					await this.app.vault.delete(audioFile);
+				}
+			}
+			
+			// Supprimer de l'index
+			this.recordingsIndex.splice(recordingIndex, 1);
+			
+			// Sauvegarder l'index mis à jour
+			await this.saveRecordingsIndex();
+			
+			new Notice('Enregistrement supprimé');
+			console.log('Enregistrement supprimé:', recordingId);
+			
+		} catch (error) {
+			console.error('Erreur lors de la suppression:', error);
+			new Notice('Erreur lors de la suppression de l\'enregistrement');
+		}
 	}
 
 	updateSidebar() {

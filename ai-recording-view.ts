@@ -11,6 +11,7 @@ export class AIRecordingView extends ItemView {
 	stateIndicator: HTMLElement;
 	timerDisplay: HTMLElement;
 	buttonContainer: HTMLElement;
+	historyList: HTMLElement;
 	timerInterval: NodeJS.Timeout | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: any) {
@@ -73,8 +74,8 @@ export class AIRecordingView extends ItemView {
 		const historyTitle = this.historyZone.createEl('h4', { text: 'Historique' });
 		historyTitle.addClass('ai-recording-history-title');
 
-		const historyList = this.historyZone.createDiv('ai-recording-history-list');
-		historyList.textContent = 'Aucun enregistrement pour le moment';
+		this.historyList = this.historyZone.createDiv('ai-recording-history-list');
+		this.updateHistoryList();
 
 		// Ajouter les styles CSS
 		this.addStyles();
@@ -127,7 +128,7 @@ export class AIRecordingView extends ItemView {
 
 		const stopButton = this.buttonContainer.createEl('button', { text: 'Stop & Supprimer' });
 		stopButton.addClass('ai-recording-btn', 'ai-recording-btn-danger');
-		stopButton.onclick = () => this.confirmDeleteRecording();
+		stopButton.onclick = () => this.confirmDeleteCurrentRecording();
 	}
 
 	createPausedButtons() {
@@ -144,7 +145,7 @@ export class AIRecordingView extends ItemView {
 
 		const stopButton = this.buttonContainer.createEl('button', { text: 'Stop & Supprimer' });
 		stopButton.addClass('ai-recording-btn', 'ai-recording-btn-danger');
-		stopButton.onclick = () => this.confirmDeleteRecording();
+		stopButton.onclick = () => this.confirmDeleteCurrentRecording();
 	}
 
 	createFinishedButtons() {
@@ -179,7 +180,7 @@ export class AIRecordingView extends ItemView {
 		});
 	}
 
-	confirmDeleteRecording() {
+	confirmDeleteCurrentRecording() {
 		const modal = document.createElement('div');
 		modal.className = 'ai-recording-modal';
 		modal.innerHTML = `
@@ -212,6 +213,81 @@ export class AIRecordingView extends ItemView {
 		
 		this.updateButtons();
 		this.updateTimer();
+		this.updateHistoryList();
+	}
+
+	updateHistoryList() {
+		this.historyList.empty();
+		
+		const recordings = this.plugin.getRecordingsIndex();
+		
+		if (recordings.length === 0) {
+			this.historyList.textContent = 'Aucun enregistrement pour le moment';
+			this.historyList.className = 'ai-recording-history-list ai-recording-history-empty';
+			return;
+		}
+		
+		this.historyList.className = 'ai-recording-history-list';
+		
+		recordings.forEach((recording: any) => {
+			const card = this.historyList.createDiv('ai-recording-card');
+			
+			// Header de la carte
+			const header = card.createDiv('ai-recording-card-header');
+			header.createEl('h5', { text: recording.title });
+			
+			const meta = header.createDiv('ai-recording-card-meta');
+			meta.createEl('span', { text: recording.date });
+			meta.createEl('span', { text: this.formatDuration(recording.duration) });
+			meta.createEl('span', { text: recording.status, cls: `ai-recording-status ai-recording-status-${recording.status}` });
+			
+			// Actions
+			const actions = card.createDiv('ai-recording-card-actions');
+			
+			if (recording.audioFile) {
+				const playButton = actions.createEl('button', { text: '▶️' });
+				playButton.addClass('ai-recording-action-btn');
+				playButton.title = 'Écouter';
+			}
+			
+			const deleteButton = actions.createEl('button', { text: '🗑️' });
+			deleteButton.addClass('ai-recording-action-btn');
+			deleteButton.title = 'Supprimer';
+			deleteButton.onclick = () => this.confirmDeleteRecording(recording);
+		});
+	}
+
+	formatDuration(milliseconds: number): string {
+		const minutes = Math.floor(milliseconds / 60000);
+		const seconds = Math.floor((milliseconds % 60000) / 1000);
+		return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+	}
+
+	confirmDeleteRecording(recording: any) {
+		const modal = document.createElement('div');
+		modal.className = 'ai-recording-modal';
+		modal.innerHTML = `
+			<div class="ai-recording-modal-content">
+				<h3>Supprimer l'enregistrement</h3>
+				<p>Êtes-vous sûr de vouloir supprimer "${recording.title}" ?</p>
+				<p class="ai-recording-modal-warning">Cette action est irréversible.</p>
+				<div class="ai-recording-modal-buttons">
+					<button class="ai-recording-btn ai-recording-btn-danger" id="confirm-delete-recording">Supprimer</button>
+					<button class="ai-recording-btn ai-recording-btn-secondary" id="cancel-delete-recording">Annuler</button>
+				</div>
+			</div>
+		`;
+		document.body.appendChild(modal);
+
+		modal.querySelector('#confirm-delete-recording')?.addEventListener('click', async () => {
+			await this.plugin.deleteRecordingFromIndex(recording.id);
+			this.updateHistoryList();
+			document.body.removeChild(modal);
+		});
+
+		modal.querySelector('#cancel-delete-recording')?.addEventListener('click', () => {
+			document.body.removeChild(modal);
+		});
 	}
 
 	updateTimer() {
@@ -367,6 +443,91 @@ export class AIRecordingView extends ItemView {
 			.ai-recording-history-list {
 				color: var(--text-muted);
 				font-style: italic;
+			}
+
+			.ai-recording-history-empty {
+				color: var(--text-muted);
+				font-style: italic;
+				text-align: center;
+				padding: 20px;
+			}
+
+			.ai-recording-card {
+				background: var(--background-primary);
+				border: 1px solid var(--background-modifier-border);
+				border-radius: 6px;
+				padding: 12px;
+				margin-bottom: 8px;
+				transition: all 0.2s ease;
+			}
+
+			.ai-recording-card:hover {
+				border-color: var(--background-modifier-border-hover);
+				background: var(--background-secondary);
+			}
+
+			.ai-recording-card-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-start;
+				margin-bottom: 8px;
+			}
+
+			.ai-recording-card-header h5 {
+				margin: 0;
+				font-size: 14px;
+				font-weight: 600;
+				color: var(--text-normal);
+				flex: 1;
+			}
+
+			.ai-recording-card-meta {
+				display: flex;
+				gap: 8px;
+				font-size: 12px;
+				color: var(--text-muted);
+			}
+
+			.ai-recording-status {
+				padding: 2px 6px;
+				border-radius: 3px;
+				font-size: 11px;
+				font-weight: 500;
+			}
+
+			.ai-recording-status-completed {
+				background: #4caf50;
+				color: white;
+			}
+
+			.ai-recording-status-processing {
+				background: #ff9800;
+				color: white;
+			}
+
+			.ai-recording-status-error {
+				background: #f44336;
+				color: white;
+			}
+
+			.ai-recording-card-actions {
+				display: flex;
+				gap: 4px;
+				justify-content: flex-end;
+			}
+
+			.ai-recording-action-btn {
+				background: none;
+				border: none;
+				padding: 4px;
+				cursor: pointer;
+				border-radius: 3px;
+				font-size: 14px;
+				transition: background 0.2s ease;
+			}
+
+			.ai-recording-action-btn:hover {
+				background: var(--background-modifier-border);
 			}
 
 			.ai-recording-modal {
