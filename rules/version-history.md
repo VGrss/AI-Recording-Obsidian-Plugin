@@ -1,5 +1,16 @@
 # Historique des Versions
 
+## Version 0.2.1 - Amélioration des Contrôles Sidebar
+**Date :** Octobre 2025
+
+• Refactorisation de la logique d'états (IDLE/RECORDING/PAUSED/FINISHED/DELETED)
+• Logique de boutons pause/resume intuitive
+• Action "terminer" (positive) avec confirmation
+• Action "stop + supprimer" (destructive) avec confirmation
+• Timer en temps réel avec gestion des pauses
+• Modales de confirmation pour les actions critiques
+• Boutons contextuels selon l'état actuel
+
 ## Version 0.2.0 - Interface Sidebar de Base
 **Date :** Octobre 2025
 
