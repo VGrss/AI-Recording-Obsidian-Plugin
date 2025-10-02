@@ -103,7 +103,17 @@ export class AIRecordingView extends ItemView {
 	createIdleButtons() {
 		const startButton = this.buttonContainer.createEl('button', { text: 'Commencer' });
 		startButton.addClass('ai-recording-btn', 'ai-recording-btn-primary');
-		startButton.onclick = () => this.plugin.setRecordingState('RECORDING');
+		startButton.onclick = async () => {
+			// Vérifier les permissions avant de démarrer
+			const hasPermission = await this.plugin.checkMicrophonePermissions();
+			if (!hasPermission) {
+				const granted = await this.plugin.requestMicrophoneAccess();
+				if (!granted) {
+					return;
+				}
+			}
+			this.plugin.setRecordingState('RECORDING');
+		};
 	}
 
 	createRecordingButtons() {
@@ -205,18 +215,16 @@ export class AIRecordingView extends ItemView {
 	}
 
 	updateTimer() {
-		const recording = this.plugin.getCurrentRecording();
-		
 		if (this.timerInterval) {
 			clearInterval(this.timerInterval);
 		}
 
-		if (recording && (this.plugin.getRecordingState() === 'RECORDING' || this.plugin.getRecordingState() === 'PAUSED')) {
+		const state = this.plugin.getRecordingState();
+		if (state === 'RECORDING' || state === 'PAUSED') {
 			this.timerInterval = setInterval(() => {
-				const now = new Date();
-				const elapsed = now.getTime() - recording.startTime.getTime() - recording.pausedTime;
-				const minutes = Math.floor(elapsed / 60000);
-				const seconds = Math.floor((elapsed % 60000) / 1000);
+				const duration = this.plugin.getRecordingDuration();
+				const minutes = Math.floor(duration / 60000);
+				const seconds = Math.floor((duration % 60000) / 1000);
 				this.timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 			}, 1000);
 		} else {

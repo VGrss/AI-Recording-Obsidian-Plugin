@@ -12,7 +12,11 @@ export default class AIRecordingPlugin extends Plugin {
 		startTime: Date;
 		pausedTime: number;
 		segments: Array<{start: number, end: number}>;
+		audioBlob?: Blob;
+		audioChunks: Blob[];
 	} | null = null;
+	mediaRecorder: MediaRecorder | null = null;
+	audioStream: MediaStream | null = null;
 
 	async onload() {
 		console.log('Plugin AI Recording chargé');
@@ -99,58 +103,180 @@ export default class AIRecordingPlugin extends Plugin {
 		}
 	}
 
-	startNewRecording() {
-		this.currentRecording = {
-			id: `recording_${Date.now()}`,
-			startTime: new Date(),
-			pausedTime: 0,
-			segments: []
+	async startNewRecording() {
+		try {
+			// Demander les permissions microphone
+			this.audioStream = await navigator.mediaDevices.getUserMedia({ 
+				audio: {
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true
+				}
+			});
+
+			// Créer le MediaRecorder
+			this.mediaRecorder = new MediaRecorder(this.audioStream, {
+				mimeType: 'audio/webm;codecs=opus'
+			});
+
+			// Initialiser l'enregistrement
+			this.currentRecording = {
+				id: `recording_${Date.now()}`,
+				startTime: new Date(),
+				pausedTime: 0,
+				segments: [],
+				audioChunks: []
+			};
+
+			// Configurer les événements MediaRecorder
+			this.setupMediaRecorderEvents();
+
+			// Démarrer l'enregistrement
+			this.mediaRecorder.start();
+			new Notice('Enregistrement démarré');
+		} catch (error) {
+			console.error('Erreur lors du démarrage de l\'enregistrement:', error);
+			new Notice(`Erreur: ${error.message}`);
+			this.setRecordingState('IDLE');
+		}
+	}
+
+	setupMediaRecorderEvents() {
+		if (!this.mediaRecorder) return;
+
+		this.mediaRecorder.ondataavailable = (event) => {
+			if (event.data.size > 0 && this.currentRecording) {
+				this.currentRecording.audioChunks.push(event.data);
+			}
 		};
-		new Notice('Enregistrement démarré');
+
+		this.mediaRecorder.onstop = () => {
+			if (this.currentRecording && this.currentRecording.audioChunks.length > 0) {
+				this.currentRecording.audioBlob = new Blob(this.currentRecording.audioChunks, {
+					type: 'audio/webm'
+				});
+				console.log('Audio blob créé:', this.currentRecording.audioBlob.size, 'bytes');
+			}
+		};
+
+		this.mediaRecorder.onerror = (event) => {
+			console.error('Erreur MediaRecorder:', event);
+			new Notice('Erreur lors de l\'enregistrement audio');
+			this.setRecordingState('IDLE');
+		};
 	}
 
 	pauseRecording() {
-		if (this.currentRecording) {
-			const now = new Date();
-			const segmentStart = new Date(this.currentRecording.startTime.getTime() + this.currentRecording.pausedTime);
-			this.currentRecording.segments.push({
-				start: segmentStart.getTime(),
-				end: now.getTime()
-			});
+		if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+			this.mediaRecorder.pause();
+			
+			if (this.currentRecording) {
+				const now = new Date();
+				const segmentStart = new Date(this.currentRecording.startTime.getTime() + this.currentRecording.pausedTime);
+				this.currentRecording.segments.push({
+					start: segmentStart.getTime(),
+					end: now.getTime()
+				});
+			}
+			new Notice('Enregistrement en pause');
 		}
-		new Notice('Enregistrement en pause');
 	}
 
 	resumeRecording() {
-		if (this.currentRecording) {
-			const now = new Date();
-			this.currentRecording.pausedTime += now.getTime() - this.currentRecording.startTime.getTime();
+		if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+			this.mediaRecorder.resume();
+			
+			if (this.currentRecording) {
+				const now = new Date();
+				this.currentRecording.pausedTime += now.getTime() - this.currentRecording.startTime.getTime();
+			}
+			new Notice('Enregistrement repris');
 		}
-		new Notice('Enregistrement repris');
 	}
 
 	finishRecording() {
-		if (this.currentRecording) {
+		if (this.mediaRecorder && this.currentRecording) {
+			// Arrêter l'enregistrement
+			if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
+				this.mediaRecorder.stop();
+			}
+			
+			// Fermer le stream audio
+			if (this.audioStream) {
+				this.audioStream.getTracks().forEach(track => track.stop());
+				this.audioStream = null;
+			}
+			
 			// Marquer l'enregistrement comme terminé
 			new Notice('Enregistrement terminé et sauvegardé');
-			this.currentRecording = null;
+			console.log('Enregistrement terminé:', this.currentRecording);
 		}
 	}
 
 	deleteRecording() {
-		if (this.currentRecording) {
+		if (this.mediaRecorder && this.currentRecording) {
+			// Arrêter l'enregistrement
+			if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
+				this.mediaRecorder.stop();
+			}
+			
+			// Fermer le stream audio
+			if (this.audioStream) {
+				this.audioStream.getTracks().forEach(track => track.stop());
+				this.audioStream = null;
+			}
+			
 			// Supprimer l'enregistrement
 			new Notice('Enregistrement supprimé');
-			this.currentRecording = null;
+			console.log('Enregistrement supprimé');
 		}
 	}
 
 	resetToIdle() {
+		// Nettoyer les ressources
+		if (this.mediaRecorder) {
+			this.mediaRecorder = null;
+		}
+		if (this.audioStream) {
+			this.audioStream.getTracks().forEach(track => track.stop());
+			this.audioStream = null;
+		}
 		this.currentRecording = null;
 	}
 
 	getCurrentRecording() {
 		return this.currentRecording;
+	}
+
+	async checkMicrophonePermissions(): Promise<boolean> {
+		try {
+			const result = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+			return result.state === 'granted';
+		} catch (error) {
+			console.warn('Impossible de vérifier les permissions microphone:', error);
+			return false;
+		}
+	}
+
+	async requestMicrophoneAccess(): Promise<boolean> {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			// Fermer immédiatement le stream de test
+			stream.getTracks().forEach(track => track.stop());
+			return true;
+		} catch (error) {
+			console.error('Accès microphone refusé:', error);
+			new Notice('Accès au microphone refusé. Veuillez autoriser l\'accès dans les paramètres du navigateur.');
+			return false;
+		}
+	}
+
+	getRecordingDuration(): number {
+		if (!this.currentRecording) return 0;
+		
+		const now = new Date();
+		const elapsed = now.getTime() - this.currentRecording.startTime.getTime() - this.currentRecording.pausedTime;
+		return Math.max(0, elapsed);
 	}
 
 	updateSidebar() {

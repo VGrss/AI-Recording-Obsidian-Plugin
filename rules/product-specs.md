@@ -4,9 +4,7 @@
 Plugin Obsidian pour l'enregistrement audio avec transcription IA et résumé automatique.
 
 **Objectif** : Enregistrer de l'audio → Transcrire avec IA → Résumer intelligemment
-
 **Plateformes** : Desktop et Mobile (selon permissions microphone)
-
 **Accès** : Bouton microphone dans le ribbon → Sidebar à droite
 
 ---
