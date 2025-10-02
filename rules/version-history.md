@@ -1,5 +1,18 @@
 # Historique des Versions
 
+## Version 0.5.1 - Correction Affichage des Cartes
+**Date :** Octobre 2025
+
+• Diagnostic complet des problèmes d'affichage des cartes
+• Ajout de données de test automatiques pour tester l'affichage
+• Bouton de debug pour diagnostiquer les problèmes en temps réel
+• Logs détaillés pour tracer la création et l'affichage des cartes
+• Correction des erreurs TypeScript (segments, formatDuration)
+• Amélioration des styles CSS avec transitions et opacité
+• Vérification de la logique d'expansion des cartes
+• Tests automatiques avec enregistrements de test
+• Interface de debug intégrée pour résoudre les problèmes
+
 ## Version 0.5.0 - Interface Historique et Cartes Avancées
 **Date :** Octobre 2025
 
