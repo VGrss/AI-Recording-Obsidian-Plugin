@@ -229,6 +229,9 @@ export default class AIRecordingPlugin extends Plugin {
 			// Sauvegarder l'enregistrement
 			await this.saveRecording();
 			
+			// Rafraîchir l'historique après sauvegarde
+			this.updateSidebar();
+			
 			// Marquer l'enregistrement comme terminé
 			new Notice('Enregistrement terminé et sauvegardé');
 			console.log('Enregistrement terminé:', this.currentRecording);
@@ -473,5 +476,6 @@ export default class AIRecordingPlugin extends Plugin {
 			this.recordingView.updateDisplay();
 		}
 		console.log('État d\'enregistrement:', this.recordingState);
+		console.log('Nombre d\'enregistrements dans l\'index:', this.recordingsIndex.length);
 	}
 }

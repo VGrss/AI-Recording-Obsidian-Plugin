@@ -225,11 +225,14 @@ export class AIRecordingView extends ItemView {
 	updateHistoryList() {
 		this.historyList.empty();
 		
+		// Nettoyer les données de test si nécessaire
+		this.clearTestRecordings();
+		
 		const recordings = this.plugin.getRecordingsIndex();
 		console.log('Recordings from index:', recordings);
 		
-		// Ajouter des données de test si aucun enregistrement
-		if (recordings.length === 0) {
+		// Ajouter des données de test SEULEMENT si aucun enregistrement ET pas de données de test déjà présentes
+		if (recordings.length === 0 && !this.hasTestRecordings()) {
 			console.log('Aucun enregistrement trouvé, ajout de données de test');
 			this.addTestRecordings();
 			const testRecordings = this.plugin.getRecordingsIndex();
@@ -251,6 +254,14 @@ export class AIRecordingView extends ItemView {
 			console.log('Creating card for recording:', recording);
 			this.createRecordingCard(recording);
 		});
+		
+		console.log(`Historique mis à jour: ${finalRecordings.length} enregistrements affichés`);
+	}
+
+	hasTestRecordings(): boolean {
+		// Vérifier si des données de test sont déjà présentes
+		const recordings = this.plugin.getRecordingsIndex();
+		return recordings.some((recording: any) => recording.id.startsWith('test-'));
 	}
 
 	addTestRecordings() {
@@ -293,6 +304,36 @@ export class AIRecordingView extends ItemView {
 		const minutes = Math.floor(milliseconds / 60000);
 		const seconds = Math.floor((milliseconds % 60000) / 1000);
 		return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+	}
+
+	debugCards() {
+		console.log('=== DEBUG CARDS ===');
+		console.log('Plugin recordingsIndex:', this.plugin.recordingsIndex);
+		console.log('History list element:', this.historyList);
+		console.log('History list children:', this.historyList.children);
+		console.log('History list classes:', this.historyList.className);
+		
+		// Forcer la mise à jour
+		this.updateHistoryList();
+		
+		// Ajouter des données de test si nécessaire
+		if (this.plugin.getRecordingsIndex().length === 0) {
+			console.log('Adding test data...');
+			this.addTestRecordings();
+			this.updateHistoryList();
+		}
+		
+		// Vérifier l'affichage des cartes
+		const cards = this.historyList.querySelectorAll('.ai-recording-card');
+		console.log('Number of cards found:', cards.length);
+		
+		cards.forEach((card, index) => {
+			console.log(`Card ${index}:`, card);
+			console.log(`Card ${index} classes:`, card.className);
+			console.log(`Card ${index} children:`, card.children);
+		});
+		
+		new Notice(`Debug terminé: ${cards.length} cartes trouvées`);
 	}
 
 	createRecordingCard(recording: any) {
@@ -459,34 +500,16 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	debugCards() {
-		console.log('=== DEBUG CARDS ===');
-		console.log('Plugin recordingsIndex:', this.plugin.recordingsIndex);
-		console.log('History list element:', this.historyList);
-		console.log('History list children:', this.historyList.children);
-		console.log('History list classes:', this.historyList.className);
+	clearTestRecordings() {
+		// Nettoyer les données de test quand de vrais enregistrements sont ajoutés
+		const recordings = this.plugin.getRecordingsIndex();
+		const realRecordings = recordings.filter((recording: any) => !recording.id.startsWith('test-'));
 		
-		// Forcer la mise à jour
-		this.updateHistoryList();
-		
-		// Ajouter des données de test si nécessaire
-		if (this.plugin.getRecordingsIndex().length === 0) {
-			console.log('Adding test data...');
-			this.addTestRecordings();
-			this.updateHistoryList();
+		if (realRecordings.length > 0 && recordings.length !== realRecordings.length) {
+			console.log('Nettoyage des données de test, conservation des vrais enregistrements');
+			this.plugin.recordingsIndex = realRecordings;
+			this.plugin.saveRecordingsIndex();
 		}
-		
-		// Vérifier l'affichage des cartes
-		const cards = this.historyList.querySelectorAll('.ai-recording-card');
-		console.log('Number of cards found:', cards.length);
-		
-		cards.forEach((card, index) => {
-			console.log(`Card ${index}:`, card);
-			console.log(`Card ${index} classes:`, card.className);
-			console.log(`Card ${index} children:`, card.children);
-		});
-		
-		new Notice(`Debug terminé: ${cards.length} cartes trouvées`);
 	}
 
 	confirmDeleteRecording(recording: any) {
