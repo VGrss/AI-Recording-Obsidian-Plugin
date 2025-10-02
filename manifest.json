@@ -1,0 +1,11 @@
+{
+	"id": "ai-recording-plugin",
+	"name": "AI Recording Plugin",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Un plugin Obsidian pour l'enregistrement audio avec traitement IA",
+	"author": "VGrss",
+	"authorUrl": "https://github.com/VGrss",
+	"fundingUrl": "https://github.com/VGrss/AI-Recording-Obsidian-Plugin",
+	"isDesktopOnly": false
+}
