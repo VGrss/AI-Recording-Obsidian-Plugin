@@ -19,6 +19,13 @@ Roadmap équilibrée pour construire et tester le plugin Obsidian AI Recording, 
 
 ---
 
+## 📋 Release 0.2.1 - Amélioration des Contrôles Sidebar
+**Objectif** : Améliorer la logique d'états et les contrôles de la sidebar pour une meilleure expérience utilisateur
+**Description** : Refactoriser la logique d'états (IDLE/RECORDING/PAUSED/FINISHED/DELETED), implémenter une logique de boutons plus intuitive avec pause/resume, terminer l'enregistrement (action positive), et stop avec suppression (action destructive), ajouter des confirmations pour les actions destructives, améliorer les transitions d'états et les feedbacks visuels
+**Tests** : Les états se comportent correctement selon la logique définie, les boutons pause/resume fonctionnent, l'action "terminer" marque l'enregistrement comme fini, l'action "stop + supprimer" détruit l'enregistrement avec confirmation, les transitions d'états sont fluides et cohérentes
+
+---
+
 ## 📋 Release 0.3 - Enregistrement Audio Fonctionnel
 **Objectif** : Implémenter l'enregistrement audio complet avec tous les contrôles
 **Description** : Gérer les permissions microphone, implémenter MediaRecorder pour capturer l'audio, créer les boutons Start/Stop/Pause/Resume fonctionnels, ajouter le timer d'enregistrement en temps réel, gérer les états et transitions, implémenter la gestion d'erreurs robuste
