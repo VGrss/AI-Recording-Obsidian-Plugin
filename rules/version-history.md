@@ -1,5 +1,19 @@
 # Historique des Versions
 
+## Version 0.5.0 - Interface Historique et Cartes Avancées
+**Date :** Octobre 2025
+
+• Cartes collapsibles pour chaque enregistrement avec animations fluides
+• Header complet avec titre auto (date+heure), durée et statut visuel
+• Onglets Summary/Transcript fonctionnels avec navigation
+• Boutons d'action: Copy (presse-papiers), Expand/Collapse, Delete
+• Tri automatique du plus récent au plus ancien
+• Animations d'état avec transitions CSS fluides
+• Interface moderne avec hover states et feedback visuel
+• Actions avancées: lecture audio, copie contenu, ouverture note
+• Design responsive avec cartes expansibles
+• Gestion complète des interactions utilisateur
+
 ## Version 0.4.0 - Sauvegarde et Organisation des Fichiers
 **Date :** Octobre 2025
 
