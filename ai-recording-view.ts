@@ -74,6 +74,12 @@ export class AIRecordingView extends ItemView {
 		const historyTitle = this.historyZone.createEl('h4', { text: 'Historique' });
 		historyTitle.addClass('ai-recording-history-title');
 
+		// Bouton de debug pour tester l'affichage
+		const debugButton = this.historyZone.createEl('button', { text: '🔧 Debug Cards' });
+		debugButton.addClass('ai-recording-btn', 'ai-recording-btn-secondary');
+		debugButton.style.marginBottom = '12px';
+		debugButton.onclick = () => this.debugCards();
+
 		this.historyList = this.historyZone.createDiv('ai-recording-history-list');
 		this.updateHistoryList();
 
@@ -220,8 +226,19 @@ export class AIRecordingView extends ItemView {
 		this.historyList.empty();
 		
 		const recordings = this.plugin.getRecordingsIndex();
+		console.log('Recordings from index:', recordings);
 		
+		// Ajouter des données de test si aucun enregistrement
 		if (recordings.length === 0) {
+			console.log('Aucun enregistrement trouvé, ajout de données de test');
+			this.addTestRecordings();
+			const testRecordings = this.plugin.getRecordingsIndex();
+			console.log('Test recordings:', testRecordings);
+		}
+		
+		const finalRecordings = this.plugin.getRecordingsIndex();
+		
+		if (finalRecordings.length === 0) {
 			this.historyList.textContent = 'Aucun enregistrement pour le moment';
 			this.historyList.className = 'ai-recording-history-list ai-recording-history-empty';
 			return;
@@ -230,12 +247,57 @@ export class AIRecordingView extends ItemView {
 		this.historyList.className = 'ai-recording-history-list';
 		
 		// Tri du plus récent au plus ancien (déjà fait dans l'index)
-		recordings.forEach((recording: any) => {
+		finalRecordings.forEach((recording: any) => {
+			console.log('Creating card for recording:', recording);
 			this.createRecordingCard(recording);
 		});
 	}
 
+	addTestRecordings() {
+		// Ajouter des enregistrements de test pour diagnostiquer
+		const testRecordings = [
+			{
+				id: 'test-1',
+				title: 'Test Recording 1',
+				date: '2025-10-02',
+				duration: 120000, // 2 minutes
+				status: 'completed',
+				audioFile: 'test-audio-1.webm',
+				summary: 'Ceci est un résumé de test pour diagnostiquer l\'affichage des cartes.',
+				transcript: 'Ceci est une transcription de test pour vérifier que les onglets fonctionnent correctement.',
+				segments: [] as Array<{start: number, end: number}>,
+				createdAt: Date.now() - 3600000, // 1 heure ago
+				updatedAt: Date.now() - 3600000
+			},
+			{
+				id: 'test-2',
+				title: 'Test Recording 2',
+				date: '2025-10-02',
+				duration: 180000, // 3 minutes
+				status: 'processing',
+				audioFile: 'test-audio-2.webm',
+				summary: 'Résumé de test numéro 2 avec du contenu plus long pour tester l\'affichage des cartes expansibles.',
+				transcript: 'Transcription de test numéro 2 avec plusieurs lignes de texte pour vérifier le scroll et l\'affichage correct.',
+				segments: [] as Array<{start: number, end: number}>,
+				createdAt: Date.now() - 7200000, // 2 heures ago
+				updatedAt: Date.now() - 7200000
+			}
+		];
+		
+		// Ajouter les enregistrements de test à l'index
+		this.plugin.recordingsIndex = testRecordings;
+		this.plugin.saveRecordingsIndex();
+	}
+
+	formatDuration(milliseconds: number): string {
+		const minutes = Math.floor(milliseconds / 60000);
+		const seconds = Math.floor((milliseconds % 60000) / 1000);
+		return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+	}
+
 	createRecordingCard(recording: any) {
+		console.log('Creating card for:', recording.title);
+		
 		const card = this.historyList.createDiv('ai-recording-card');
 		card.setAttribute('data-recording-id', recording.id);
 		
@@ -319,22 +381,33 @@ export class AIRecordingView extends ItemView {
 		const expandButton = contentActions.createEl('button', { text: '📄 Ouvrir' });
 		expandButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
 		expandButton.onclick = () => this.openInNewNote(recording);
+		
+		console.log('Card created successfully for:', recording.title);
 	}
 
 	toggleCardExpansion(card: HTMLElement) {
+		console.log('Toggling card expansion for:', card.getAttribute('data-recording-id'));
+		
 		const content = card.querySelector('.ai-recording-card-content') as HTMLElement;
 		const expandIcon = card.querySelector('.ai-recording-expand-icon') as HTMLElement;
+		
+		if (!content || !expandIcon) {
+			console.error('Content or expandIcon not found');
+			return;
+		}
 		
 		if (content.classList.contains('ai-recording-card-content-collapsed')) {
 			content.classList.remove('ai-recording-card-content-collapsed');
 			content.classList.add('ai-recording-card-content-expanded');
 			expandIcon.textContent = '▼';
 			card.classList.add('ai-recording-card-expanded');
+			console.log('Card expanded');
 		} else {
 			content.classList.remove('ai-recording-card-content-expanded');
 			content.classList.add('ai-recording-card-content-collapsed');
 			expandIcon.textContent = '▶';
 			card.classList.remove('ai-recording-card-expanded');
+			console.log('Card collapsed');
 		}
 	}
 
@@ -386,10 +459,34 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	formatDuration(milliseconds: number): string {
-		const minutes = Math.floor(milliseconds / 60000);
-		const seconds = Math.floor((milliseconds % 60000) / 1000);
-		return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+	debugCards() {
+		console.log('=== DEBUG CARDS ===');
+		console.log('Plugin recordingsIndex:', this.plugin.recordingsIndex);
+		console.log('History list element:', this.historyList);
+		console.log('History list children:', this.historyList.children);
+		console.log('History list classes:', this.historyList.className);
+		
+		// Forcer la mise à jour
+		this.updateHistoryList();
+		
+		// Ajouter des données de test si nécessaire
+		if (this.plugin.getRecordingsIndex().length === 0) {
+			console.log('Adding test data...');
+			this.addTestRecordings();
+			this.updateHistoryList();
+		}
+		
+		// Vérifier l'affichage des cartes
+		const cards = this.historyList.querySelectorAll('.ai-recording-card');
+		console.log('Number of cards found:', cards.length);
+		
+		cards.forEach((card, index) => {
+			console.log(`Card ${index}:`, card);
+			console.log(`Card ${index} classes:`, card.className);
+			console.log(`Card ${index} children:`, card.children);
+		});
+		
+		new Notice(`Debug terminé: ${cards.length} cartes trouvées`);
 	}
 
 	confirmDeleteRecording(recording: any) {
@@ -686,11 +783,15 @@ export class AIRecordingView extends ItemView {
 				max-height: 0;
 				overflow: hidden;
 				padding: 0 16px;
+				opacity: 0;
+				transition: all 0.3s ease;
 			}
 
 			.ai-recording-card-content-expanded {
 				max-height: 500px;
 				padding: 16px;
+				opacity: 1;
+				transition: all 0.3s ease;
 			}
 
 			.ai-recording-card-tabs {
