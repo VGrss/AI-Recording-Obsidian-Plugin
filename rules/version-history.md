@@ -1,5 +1,17 @@
 # Historique des Versions
 
+## Version 0.5.2 - Rafraîchissement Temps Réel de l'Historique
+**Date :** Octobre 2025
+
+• Rafraîchissement automatique de l'historique après sauvegarde d'enregistrement
+• Mise à jour en temps réel de l'interface lors de la fin d'enregistrement
+• Synchronisation complète entre sauvegarde et affichage des cartes
+• Nettoyage automatique des données de test quand de vrais enregistrements sont ajoutés
+• Logs détaillés pour tracer le cycle complet d'enregistrement → affichage
+• Méthode clearTestRecordings() pour gérer les données de test intelligemment
+• Amélioration de updateSidebar() avec logs de diagnostic
+• Correction du problème: les cartes s'ajoutent maintenant automatiquement à l'historique
+
 ## Version 0.5.1 - Correction Affichage des Cartes
 **Date :** Octobre 2025
 
