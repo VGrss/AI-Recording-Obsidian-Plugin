@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import { RecordingState } from './main';
 
 export const AI_RECORDING_VIEW_TYPE = 'ai-recording-sidebar';
@@ -229,32 +229,161 @@ export class AIRecordingView extends ItemView {
 		
 		this.historyList.className = 'ai-recording-history-list';
 		
+		// Tri du plus récent au plus ancien (déjà fait dans l'index)
 		recordings.forEach((recording: any) => {
-			const card = this.historyList.createDiv('ai-recording-card');
-			
-			// Header de la carte
-			const header = card.createDiv('ai-recording-card-header');
-			header.createEl('h5', { text: recording.title });
-			
-			const meta = header.createDiv('ai-recording-card-meta');
-			meta.createEl('span', { text: recording.date });
-			meta.createEl('span', { text: this.formatDuration(recording.duration) });
-			meta.createEl('span', { text: recording.status, cls: `ai-recording-status ai-recording-status-${recording.status}` });
-			
-			// Actions
-			const actions = card.createDiv('ai-recording-card-actions');
-			
-			if (recording.audioFile) {
-				const playButton = actions.createEl('button', { text: '▶️' });
-				playButton.addClass('ai-recording-action-btn');
-				playButton.title = 'Écouter';
-			}
-			
-			const deleteButton = actions.createEl('button', { text: '🗑️' });
-			deleteButton.addClass('ai-recording-action-btn');
-			deleteButton.title = 'Supprimer';
-			deleteButton.onclick = () => this.confirmDeleteRecording(recording);
+			this.createRecordingCard(recording);
 		});
+	}
+
+	createRecordingCard(recording: any) {
+		const card = this.historyList.createDiv('ai-recording-card');
+		card.setAttribute('data-recording-id', recording.id);
+		
+		// Header de la carte (collapsible)
+		const header = card.createDiv('ai-recording-card-header');
+		header.onclick = () => this.toggleCardExpansion(card);
+		
+		// Titre avec icône d'expansion
+		const titleRow = header.createDiv('ai-recording-card-title-row');
+		const expandIcon = titleRow.createEl('span', { text: '▶' });
+		expandIcon.addClass('ai-recording-expand-icon');
+		
+		const title = titleRow.createEl('h5', { text: recording.title });
+		title.addClass('ai-recording-card-title');
+		
+		// Métadonnées
+		const meta = header.createDiv('ai-recording-card-meta');
+		meta.createEl('span', { text: recording.date, cls: 'ai-recording-date' });
+		meta.createEl('span', { text: this.formatDuration(recording.duration), cls: 'ai-recording-duration' });
+		meta.createEl('span', { text: recording.status, cls: `ai-recording-status ai-recording-status-${recording.status}` });
+		
+		// Actions dans le header
+		const headerActions = header.createDiv('ai-recording-card-header-actions');
+		
+		if (recording.audioFile) {
+			const playButton = headerActions.createEl('button', { text: '▶️' });
+			playButton.addClass('ai-recording-action-btn');
+			playButton.title = 'Écouter';
+			playButton.onclick = (e) => {
+				e.stopPropagation();
+				this.playRecording(recording);
+			};
+		}
+		
+		const deleteButton = headerActions.createEl('button', { text: '🗑️' });
+		deleteButton.addClass('ai-recording-action-btn');
+		deleteButton.title = 'Supprimer';
+		deleteButton.onclick = (e) => {
+			e.stopPropagation();
+			this.confirmDeleteRecording(recording);
+		};
+		
+		// Contenu collapsible
+		const content = card.createDiv('ai-recording-card-content');
+		content.addClass('ai-recording-card-content-collapsed');
+		
+		// Onglets Summary/Transcript
+		const tabs = content.createDiv('ai-recording-card-tabs');
+		const tabButtons = tabs.createDiv('ai-recording-tab-buttons');
+		
+		const summaryTab = tabButtons.createEl('button', { text: 'Summary' });
+		summaryTab.addClass('ai-recording-tab-btn', 'ai-recording-tab-active');
+		summaryTab.setAttribute('data-tab', 'summary');
+		summaryTab.onclick = () => this.switchTab(card, 'summary');
+		
+		const transcriptTab = tabButtons.createEl('button', { text: 'Transcript' });
+		transcriptTab.addClass('ai-recording-tab-btn');
+		transcriptTab.setAttribute('data-tab', 'transcript');
+		transcriptTab.onclick = () => this.switchTab(card, 'transcript');
+		
+		// Contenu des onglets
+		const tabContent = content.createDiv('ai-recording-tab-content');
+		
+		// Onglet Summary
+		const summaryContent = tabContent.createDiv('ai-recording-summary-content');
+		summaryContent.addClass('ai-recording-tab-panel', 'ai-recording-tab-panel-active');
+		summaryContent.textContent = recording.summary || 'Aucun résumé disponible';
+		
+		// Onglet Transcript
+		const transcriptContent = tabContent.createDiv('ai-recording-transcript-content');
+		transcriptContent.addClass('ai-recording-tab-panel');
+		transcriptContent.textContent = recording.transcript || 'Aucune transcription disponible';
+		
+		// Actions dans le contenu
+		const contentActions = content.createDiv('ai-recording-card-content-actions');
+		
+		const copyButton = contentActions.createEl('button', { text: '📋 Copier' });
+		copyButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
+		copyButton.onclick = () => this.copyContent(card);
+		
+		const expandButton = contentActions.createEl('button', { text: '📄 Ouvrir' });
+		expandButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
+		expandButton.onclick = () => this.openInNewNote(recording);
+	}
+
+	toggleCardExpansion(card: HTMLElement) {
+		const content = card.querySelector('.ai-recording-card-content') as HTMLElement;
+		const expandIcon = card.querySelector('.ai-recording-expand-icon') as HTMLElement;
+		
+		if (content.classList.contains('ai-recording-card-content-collapsed')) {
+			content.classList.remove('ai-recording-card-content-collapsed');
+			content.classList.add('ai-recording-card-content-expanded');
+			expandIcon.textContent = '▼';
+			card.classList.add('ai-recording-card-expanded');
+		} else {
+			content.classList.remove('ai-recording-card-content-expanded');
+			content.classList.add('ai-recording-card-content-collapsed');
+			expandIcon.textContent = '▶';
+			card.classList.remove('ai-recording-card-expanded');
+		}
+	}
+
+	switchTab(card: HTMLElement, tabName: string) {
+		// Désactiver tous les onglets
+		const tabButtons = card.querySelectorAll('.ai-recording-tab-btn');
+		const tabPanels = card.querySelectorAll('.ai-recording-tab-panel');
+		
+		tabButtons.forEach(btn => btn.classList.remove('ai-recording-tab-active'));
+		tabPanels.forEach(panel => panel.classList.remove('ai-recording-tab-panel-active'));
+		
+		// Activer l'onglet sélectionné
+		const activeTab = card.querySelector(`.ai-recording-tab-btn[data-tab="${tabName}"]`) as HTMLElement;
+		const activePanel = card.querySelector(`.ai-recording-${tabName}-content`) as HTMLElement;
+		
+		if (activeTab) activeTab.classList.add('ai-recording-tab-active');
+		if (activePanel) activePanel.classList.add('ai-recording-tab-panel-active');
+	}
+
+	playRecording(recording: any) {
+		// Pour l'instant, juste un message
+		// TODO: Implémenter la lecture audio réelle
+		new Notice(`Lecture de ${recording.title}`);
+		console.log('Lecture de l\'enregistrement:', recording);
+	}
+
+	copyContent(card: HTMLElement) {
+		const activePanel = card.querySelector('.ai-recording-tab-panel-active') as HTMLElement;
+		if (activePanel) {
+			const text = activePanel.textContent || '';
+			navigator.clipboard.writeText(text).then(() => {
+				new Notice('Contenu copié dans le presse-papiers');
+			}).catch(err => {
+				console.error('Erreur lors de la copie:', err);
+				new Notice('Erreur lors de la copie');
+			});
+		}
+	}
+
+	openInNewNote(recording: any) {
+		// Créer une nouvelle note avec le contenu de l'enregistrement
+		const content = `# ${recording.title}\n\n**Date:** ${recording.date}\n**Durée:** ${this.formatDuration(recording.duration)}\n\n## Résumé\n\n${recording.summary || 'Aucun résumé disponible'}\n\n## Transcription\n\n${recording.transcript || 'Aucune transcription disponible'}`;
+		
+		// Ouvrir une nouvelle note dans Obsidian
+		const newFile = this.plugin.app.vault.create(`${recording.title}.md`, content);
+		if (newFile) {
+			this.plugin.app.workspace.openLinkText(newFile.path, '', true);
+			new Notice('Note créée avec le contenu de l\'enregistrement');
+		}
 	}
 
 	formatDuration(milliseconds: number): string {
@@ -455,42 +584,73 @@ export class AIRecordingView extends ItemView {
 			.ai-recording-card {
 				background: var(--background-primary);
 				border: 1px solid var(--background-modifier-border);
-				border-radius: 6px;
-				padding: 12px;
-				margin-bottom: 8px;
-				transition: all 0.2s ease;
+				border-radius: 8px;
+				margin-bottom: 12px;
+				transition: all 0.3s ease;
+				overflow: hidden;
 			}
 
 			.ai-recording-card:hover {
 				border-color: var(--background-modifier-border-hover);
-				background: var(--background-secondary);
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+			}
+
+			.ai-recording-card-expanded {
+				border-color: var(--interactive-accent);
 			}
 
 			.ai-recording-card-header {
+				padding: 12px 16px;
+				cursor: pointer;
+				transition: background 0.2s ease;
 				display: flex;
 				justify-content: space-between;
-				align-items: flex-start;
-				margin-bottom: 8px;
+				align-items: center;
 			}
 
-			.ai-recording-card-header h5 {
+			.ai-recording-card-header:hover {
+				background: var(--background-secondary);
+			}
+
+			.ai-recording-card-title-row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				flex: 1;
+			}
+
+			.ai-recording-expand-icon {
+				font-size: 12px;
+				color: var(--text-muted);
+				transition: transform 0.2s ease;
+			}
+
+			.ai-recording-card-title {
 				margin: 0;
 				font-size: 14px;
 				font-weight: 600;
 				color: var(--text-normal);
-				flex: 1;
 			}
 
 			.ai-recording-card-meta {
 				display: flex;
-				gap: 8px;
+				gap: 12px;
 				font-size: 12px;
 				color: var(--text-muted);
+				margin-left: 16px;
+			}
+
+			.ai-recording-date {
+				font-weight: 500;
+			}
+
+			.ai-recording-duration {
+				font-family: monospace;
 			}
 
 			.ai-recording-status {
-				padding: 2px 6px;
-				border-radius: 3px;
+				padding: 2px 8px;
+				border-radius: 12px;
 				font-size: 11px;
 				font-weight: 500;
 			}
@@ -510,24 +670,108 @@ export class AIRecordingView extends ItemView {
 				color: white;
 			}
 
-			.ai-recording-card-actions {
+			.ai-recording-card-header-actions {
 				display: flex;
 				gap: 4px;
+				margin-left: 12px;
+			}
+
+			.ai-recording-card-content {
+				border-top: 1px solid var(--background-modifier-border);
+				background: var(--background-secondary);
+				transition: all 0.3s ease;
+			}
+
+			.ai-recording-card-content-collapsed {
+				max-height: 0;
+				overflow: hidden;
+				padding: 0 16px;
+			}
+
+			.ai-recording-card-content-expanded {
+				max-height: 500px;
+				padding: 16px;
+			}
+
+			.ai-recording-card-tabs {
+				margin-bottom: 16px;
+			}
+
+			.ai-recording-tab-buttons {
+				display: flex;
+				gap: 4px;
+				margin-bottom: 12px;
+			}
+
+			.ai-recording-tab-btn {
+				padding: 6px 12px;
+				border: none;
+				background: var(--background-primary);
+				color: var(--text-muted);
+				border-radius: 4px;
+				font-size: 12px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+
+			.ai-recording-tab-btn:hover {
+				background: var(--background-modifier-border);
+				color: var(--text-normal);
+			}
+
+			.ai-recording-tab-active {
+				background: var(--interactive-accent);
+				color: white;
+			}
+
+			.ai-recording-tab-panel {
+				display: none;
+				padding: 12px;
+				background: var(--background-primary);
+				border-radius: 6px;
+				border: 1px solid var(--background-modifier-border);
+				font-size: 13px;
+				line-height: 1.5;
+				color: var(--text-normal);
+				max-height: 200px;
+				overflow-y: auto;
+			}
+
+			.ai-recording-tab-panel-active {
+				display: block;
+			}
+
+			.ai-recording-card-content-actions {
+				display: flex;
+				gap: 8px;
 				justify-content: flex-end;
+				margin-top: 12px;
 			}
 
 			.ai-recording-action-btn {
 				background: none;
 				border: none;
-				padding: 4px;
+				padding: 6px;
 				cursor: pointer;
-				border-radius: 3px;
+				border-radius: 4px;
 				font-size: 14px;
 				transition: background 0.2s ease;
 			}
 
 			.ai-recording-action-btn:hover {
 				background: var(--background-modifier-border);
+			}
+
+			.ai-recording-action-btn-text {
+				font-size: 12px;
+				padding: 6px 12px;
+				background: var(--background-primary);
+				border: 1px solid var(--background-modifier-border);
+			}
+
+			.ai-recording-action-btn-text:hover {
+				background: var(--background-modifier-border-hover);
 			}
 
 			.ai-recording-modal {
