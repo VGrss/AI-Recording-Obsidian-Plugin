@@ -1,5 +1,17 @@
 # Historique des Versions
 
+## Version 0.4.0 - Sauvegarde et Organisation des Fichiers
+**Date :** Octobre 2025
+
+• Sauvegarde des fichiers audio dans le vault avec createBinary()
+• Structure de données complète pour les métadonnées d'enregistrement
+• Découpage automatique des fichiers lourds (limite 25MB)
+• Organisation des fichiers par date (YYYY-MM-DD)
+• Index des enregistrements avec persistence JSON
+• Interface d'historique avec cartes d'enregistrement
+• Actions sur les enregistrements (écouter, supprimer)
+• Gestion complète du cycle de vie des fichiers
+
 ## Version 0.3.0 - Enregistrement Audio Fonctionnel
 **Date :** Octobre 2025
 
