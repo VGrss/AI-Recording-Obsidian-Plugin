@@ -1,5 +1,27 @@
 # Historique des Versions
 
+## Version 0.6.0 - Paramètres Complets
+**Date :** 10 Octobre 2025
+
+• **Interface de paramètres complète** avec onglet dédié dans les paramètres Obsidian
+• **Section Transcription** : Choix du provider (OpenAI/Local), modèle, langue, mode qualité/rapide
+• **Section Résumé IA** : Provider (OpenAI/Anthropic/Local), modèles spécifiques, longueur configurable
+• **Template de prompt éditable** avec variables dynamiques ({{transcript}}, {{language}}, {{datetime}}, etc.)
+• **Section Export** : Format audio/transcript, organisation par date, découpage automatique
+• **Paramètres divers** : Avertissement initial, suppression automatique, raccourcis clavier
+• **Persistance complète** : Tous les paramètres sauvegardés et restaurés au redémarrage
+• **Valeurs par défaut intelligentes** : Configuration optimale dès l'installation
+• **Interface dynamique** : Les options changent selon le provider sélectionné
+• **Gestion des clés API** : Champs sécurisés pour OpenAI et Anthropic
+• **Slider interactifs** : Pour taille des segments et délai de suppression
+• **Bouton de réinitialisation** : Pour restaurer le template par défaut
+
+**Architecture** :
+- Nouveau fichier `settings.ts` avec interface `AIRecordingSettings`
+- Classe `AIRecordingSettingTab` pour l'interface utilisateur
+- Intégration complète dans `main.ts` avec `loadSettings()` et `saveSettings()`
+- Support multi-provider préparé pour futures intégrations
+
 ## Version 0.5.3 - Correction Bug Sauvegarde Enregistrements
 **Date :** 10 Octobre 2025
 

@@ -1,5 +1,6 @@
 import { Plugin, Notice, WorkspaceLeaf, TFile } from 'obsidian';
 import { AIRecordingView, AI_RECORDING_VIEW_TYPE } from './ai-recording-view';
+import { AIRecordingSettings, DEFAULT_SETTINGS, AIRecordingSettingTab } from './settings';
 
 export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED';
 
@@ -18,6 +19,7 @@ export interface RecordingMetadata {
 }
 
 export default class AIRecordingPlugin extends Plugin {
+	settings: AIRecordingSettings;
 	sidebar: WorkspaceLeaf | null = null;
 	recordingState: RecordingState = 'IDLE';
 	recordingView: AIRecordingView | null = null;
@@ -36,6 +38,13 @@ export default class AIRecordingPlugin extends Plugin {
 
 	async onload() {
 		console.log('Plugin AI Recording chargé');
+		
+		// Charger les paramètres
+		await this.loadSettings();
+		
+		// Mettre à jour le dossier d'enregistrements depuis les paramètres
+		this.recordingsFolder = this.settings.recordingsFolder;
+		
 		new Notice('Plugin AI Recording chargé avec succès');
 
 		// Charger l'index des enregistrements
@@ -52,8 +61,21 @@ export default class AIRecordingPlugin extends Plugin {
 			this.toggleSidebar();
 		});
 
+		// Ajouter l'onglet de paramètres
+		this.addSettingTab(new AIRecordingSettingTab(this.app, this));
+
 		// Créer la sidebar au démarrage
 		this.createSidebar();
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+		// Mettre à jour le dossier d'enregistrements si changé
+		this.recordingsFolder = this.settings.recordingsFolder;
 	}
 
 	onunload() {
