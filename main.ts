@@ -215,10 +215,23 @@ export default class AIRecordingPlugin extends Plugin {
 
 	async finishRecording() {
 		if (this.mediaRecorder && this.currentRecording) {
+			// Créer une Promise qui attend que le blob soit créé
+			const blobReady = new Promise<void>((resolve) => {
+				if (this.mediaRecorder) {
+					this.mediaRecorder.addEventListener('stop', () => {
+						// Attendre un peu pour s'assurer que onstop a fini
+						setTimeout(() => resolve(), 100);
+					}, { once: true });
+				}
+			});
+			
 			// Arrêter l'enregistrement
 			if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
 				this.mediaRecorder.stop();
 			}
+			
+			// Attendre que le blob soit créé
+			await blobReady;
 			
 			// Fermer le stream audio
 			if (this.audioStream) {

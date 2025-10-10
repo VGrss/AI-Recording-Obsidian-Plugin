@@ -1,5 +1,18 @@
 # Historique des Versions
 
+## Version 0.5.3 - Correction Bug Sauvegarde Enregistrements
+**Date :** 10 Octobre 2025
+
+• **FIX CRITIQUE:** Correction du bug de timing empêchant la sauvegarde des enregistrements
+• Ajout d'une Promise pour attendre la création du blob audio avant sauvegarde
+• L'événement onstop du MediaRecorder est maintenant correctement attendu
+• Les enregistrements sont désormais sauvegardés et affichés dans l'historique
+• Amélioration de la robustesse de la méthode finishRecording()
+• Timeout de 100ms ajouté pour garantir la création complète du blob
+• Synchronisation parfaite entre arrêt d'enregistrement et sauvegarde
+
+**Contexte technique:** Le bug était causé par l'appel asynchrone de `mediaRecorder.stop()` qui ne créait pas immédiatement l'audioBlob, provoquant un retour prématuré dans `saveRecording()`.
+
 ## Version 0.5.2 - Rafraîchissement Temps Réel de l'Historique
 **Date :** Octobre 2025
 
