@@ -74,12 +74,6 @@ export class AIRecordingView extends ItemView {
 		const historyTitle = this.historyZone.createEl('h4', { text: 'Historique' });
 		historyTitle.addClass('ai-recording-history-title');
 
-		// Bouton de debug pour tester l'affichage
-		const debugButton = this.historyZone.createEl('button', { text: '🔧 Debug Cards' });
-		debugButton.addClass('ai-recording-btn', 'ai-recording-btn-secondary');
-		debugButton.style.marginBottom = '12px';
-		debugButton.onclick = () => this.debugCards();
-
 		this.historyList = this.historyZone.createDiv('ai-recording-history-list');
 		this.updateHistoryList();
 
@@ -304,36 +298,6 @@ export class AIRecordingView extends ItemView {
 		const minutes = Math.floor(milliseconds / 60000);
 		const seconds = Math.floor((milliseconds % 60000) / 1000);
 		return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-	}
-
-	debugCards() {
-		console.log('=== DEBUG CARDS ===');
-		console.log('Plugin recordingsIndex:', this.plugin.recordingsIndex);
-		console.log('History list element:', this.historyList);
-		console.log('History list children:', this.historyList.children);
-		console.log('History list classes:', this.historyList.className);
-		
-		// Forcer la mise à jour
-		this.updateHistoryList();
-		
-		// Ajouter des données de test si nécessaire
-		if (this.plugin.getRecordingsIndex().length === 0) {
-			console.log('Adding test data...');
-			this.addTestRecordings();
-			this.updateHistoryList();
-		}
-		
-		// Vérifier l'affichage des cartes
-		const cards = this.historyList.querySelectorAll('.ai-recording-card');
-		console.log('Number of cards found:', cards.length);
-		
-		cards.forEach((card, index) => {
-			console.log(`Card ${index}:`, card);
-			console.log(`Card ${index} classes:`, card.className);
-			console.log(`Card ${index} children:`, card.children);
-		});
-		
-		new Notice(`Debug terminé: ${cards.length} cartes trouvées`);
 	}
 
 	createRecordingCard(recording: any) {
