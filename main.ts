@@ -302,6 +302,11 @@ export default class AIRecordingPlugin extends Plugin {
 			// Supprimer l'enregistrement
 			new Notice('Enregistrement supprimé');
 			console.log('Enregistrement supprimé');
+			
+			// Revenir automatiquement à IDLE pour permettre un nouvel enregistrement
+			setTimeout(() => {
+				this.setRecordingState('IDLE');
+			}, 500); // Petit délai pour que l'utilisateur voie le message de suppression
 		}
 	}
 

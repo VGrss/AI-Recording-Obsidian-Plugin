@@ -1,5 +1,13 @@
 # Historique des Versions
 
+## Version 0.8.1 - Fix Transition État DELETED → IDLE
+**Date :** 14 Octobre 2025
+
+• **Fix critique** : Correction de la transition automatique de l'état DELETED vers IDLE après suppression d'un enregistrement
+• **Problème résolu** : Lorsqu'un enregistrement en cours était supprimé via "Stop & Supprimer", l'interface restait bloquée sur l'état DELETED sans bouton d'action disponible
+• **Solution** : Ajout d'une transition automatique vers IDLE après 500ms, permettant de démarrer immédiatement un nouvel enregistrement
+• **Impact** : Amélioration de l'expérience utilisateur en évitant le blocage de l'interface
+
 ## Version 0.8.0 - Intégration Résumé IA avec OpenAI GPT
 **Date :** 14 Octobre 2025
 
