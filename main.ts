@@ -62,8 +62,8 @@ export default class AIRecordingPlugin extends Plugin {
 		});
 
 		// Ajouter le bouton microphone dans le ribbon
-		this.addRibbonIcon('mic', 'AI Recording', () => {
-			this.toggleSidebar();
+		this.addRibbonIcon('mic', 'AI Recording', async () => {
+			await this.toggleSidebar();
 		});
 
 		// Ajouter l'onglet de paramètres
@@ -84,8 +84,8 @@ export default class AIRecordingPlugin extends Plugin {
 		this.addCommand({
 			id: 'toggle-sidebar',
 			name: 'Ouvrir/Fermer la sidebar AI Recording',
-			callback: () => {
-				this.toggleSidebar();
+			callback: async () => {
+				await this.toggleSidebar();
 			}
 		});
 
@@ -161,29 +161,29 @@ export default class AIRecordingPlugin extends Plugin {
 	async createSidebar() {
 		const { workspace } = this.app;
 		
-		// Créer la sidebar si elle n'existe pas
-		if (!this.sidebar) {
-			this.sidebar = workspace.getRightLeaf(false);
-			await this.sidebar.setViewState({
-				type: AI_RECORDING_VIEW_TYPE,
-				active: true,
-			});
-		}
-	}
-
-	toggleSidebar() {
-		const { workspace } = this.app;
-		
-		// Vérifier si la sidebar existe déjà
+		// Vérifier s'il existe déjà une vue de ce type
 		const existingLeaf = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE)[0];
 		
 		if (existingLeaf) {
-			// La sidebar existe, la révéler/activer
+			// La vue existe, la révéler
 			workspace.revealLeaf(existingLeaf);
+			this.sidebar = existingLeaf;
 		} else {
-			// La sidebar n'existe pas, la créer
-			this.createSidebar();
+			// Créer un nouveau leaf dans la sidebar droite
+			const leaf = workspace.getRightLeaf(false);
+			if (leaf) {
+				await leaf.setViewState({
+					type: AI_RECORDING_VIEW_TYPE,
+					active: true,
+				});
+				this.sidebar = leaf;
+				workspace.revealLeaf(leaf);
+			}
 		}
+	}
+
+	async toggleSidebar() {
+		await this.createSidebar();
 	}
 
 	getRecordingState(): RecordingState {
