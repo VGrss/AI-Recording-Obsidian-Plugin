@@ -1,5 +1,22 @@
 # Historique des Versions
 
+## Version 0.9.4 - Ouverture Automatique de la Sidebar
+**Date :** 14 Octobre 2025
+
+• **Ouverture automatique** : Le clic sur l'icône microphone ouvre automatiquement la sidebar au lieu de la basculer
+• **Révélation intelligente** : Si la sidebar existe déjà, elle est révélée/activée plutôt que fermée
+• **Expérience optimisée** : Accès plus rapide et intuitif aux contrôles d'enregistrement
+• **Comportement cohérent** : La sidebar reste accessible à tout moment via l'icône microphone
+
+**Changement de comportement** :
+- Avant : Clic sur microphone = Toggle (ouvre/ferme alternativement)
+- Après : Clic sur microphone = Ouvre toujours (ou révèle si déjà ouverte)
+
+**Architecture** :
+- Modification de la méthode `toggleSidebar()` dans main.ts
+- Utilisation de `workspace.getLeavesOfType()` pour détecter les sidebars existantes
+- Utilisation de `workspace.revealLeaf()` pour révéler une sidebar déjà ouverte
+
 ## Version 0.9.3 - Titres AI et Interface Améliorée
 **Date :** 14 Octobre 2025
 

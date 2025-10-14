@@ -174,10 +174,14 @@ export default class AIRecordingPlugin extends Plugin {
 	toggleSidebar() {
 		const { workspace } = this.app;
 		
-		if (this.sidebar) {
-			workspace.detachLeavesOfType(AI_RECORDING_VIEW_TYPE);
-			this.sidebar = null;
+		// Vérifier si la sidebar existe déjà
+		const existingLeaf = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE)[0];
+		
+		if (existingLeaf) {
+			// La sidebar existe, la révéler/activer
+			workspace.revealLeaf(existingLeaf);
 		} else {
+			// La sidebar n'existe pas, la créer
 			this.createSidebar();
 		}
 	}

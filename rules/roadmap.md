@@ -95,4 +95,9 @@ secondary information
 - Improve the Processing status : it should appear not in the Zone de 
 contrôle but in the Card within the Zone historique with the list of 
 recordings
-- Improve the saving of the Recording on Notion so that the Title of the recording is : 
+- Improve the saving of the Recording on Notion so that the Title of the recording is : Recording title (AI generated in 3 words) - {duration of the recording}
+
+## 📋 Release 0.9.4 - Ouverture Automatique de la Sidebar
+**Objectif** : Améliorer l'expérience utilisateur en ouvrant automatiquement la sidebar au clic sur l'icône microphone
+**Description** : Implémenter l'ouverture automatique de la sidebar droite lors du clic sur l'icône microphone dans la barre de navigation gauche (ribbon). Si la sidebar est déjà ouverte, le clic la révèle/active. Cette fonctionnalité permet un accès plus rapide et intuitif aux contrôles d'enregistrement.
+**Tests** : Le clic sur l'icône microphone ouvre la sidebar si elle est fermée, la sidebar s'active/se révèle si elle est déjà ouverte, le comportement est cohérent et fluide, aucune régression sur les autres fonctionnalités ribbon
