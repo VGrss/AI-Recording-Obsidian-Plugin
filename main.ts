@@ -2,8 +2,9 @@ import { Plugin, Notice, WorkspaceLeaf, TFile } from 'obsidian';
 import { AIRecordingView, AI_RECORDING_VIEW_TYPE } from './ai-recording-view';
 import { AIRecordingSettings, DEFAULT_SETTINGS, AIRecordingSettingTab } from './settings';
 import { TranscriptionService } from './transcription-service';
+import { SummaryService } from './summary-service';
 
-export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED' | 'UPLOADING' | 'TRANSCRIBING';
+export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED' | 'UPLOADING' | 'TRANSCRIBING' | 'SUMMARIZING';
 
 export interface RecordingMetadata {
 	id: string;
@@ -37,6 +38,7 @@ export default class AIRecordingPlugin extends Plugin {
 	recordingsIndex: RecordingMetadata[] = [];
 	recordingsFolder: string = 'AI Recordings';
 	transcriptionService: TranscriptionService;
+	summaryService: SummaryService;
 
 	async onload() {
 		console.log('Plugin AI Recording chargé');
@@ -47,8 +49,9 @@ export default class AIRecordingPlugin extends Plugin {
 		// Mettre à jour le dossier d'enregistrements depuis les paramètres
 		this.recordingsFolder = this.settings.recordingsFolder;
 		
-		// Initialiser le service de transcription
+		// Initialiser les services
 		this.transcriptionService = new TranscriptionService();
+		this.summaryService = new SummaryService();
 		
 		new Notice('Plugin AI Recording chargé avec succès');
 
@@ -654,9 +657,14 @@ export default class AIRecordingPlugin extends Plugin {
 			new Notice('Transcription terminée avec succès !');
 			console.log('Transcription complétée:', result);
 
-			// Retour à l'état IDLE
-			this.setRecordingState('IDLE');
-			this.updateSidebar();
+			// Démarrer la génération du résumé si configuré
+			if (this.settings.summaryProvider === 'openai') {
+				await this.generateSummary(recordingId, result.text);
+			} else {
+				// Retour à l'état IDLE si pas de résumé
+				this.setRecordingState('IDLE');
+				this.updateSidebar();
+			}
 
 		} catch (error) {
 			console.error('Erreur lors de la transcription:', error);
@@ -718,5 +726,110 @@ ${transcriptText}
 		const minutes = Math.floor(milliseconds / 60000);
 		const seconds = Math.floor((milliseconds % 60000) / 1000);
 		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+	}
+
+	async generateSummary(recordingId: string, transcriptText: string) {
+		try {
+			// Trouver l'enregistrement dans l'index
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (!recording) {
+				console.error('Enregistrement non trouvé:', recordingId);
+				return;
+			}
+
+			// Vérifier la clé API
+			if (!this.settings.openaiApiKey || this.settings.openaiApiKey.trim() === '') {
+				new Notice('Clé API OpenAI manquante pour le résumé.');
+				this.setRecordingState('IDLE');
+				this.updateSidebar();
+				return;
+			}
+
+			// Passer à l'état SUMMARIZING
+			this.setRecordingState('SUMMARIZING');
+
+			// Préparer les variables pour le template
+			const variables = {
+				transcript: transcriptText,
+				language: recording.transcriptFile ? 'détectée' : 'non détectée',
+				datetime: new Date().toLocaleString('fr-FR'),
+				duration: this.formatDuration(recording.duration),
+				title: recording.title,
+				date: recording.date
+			};
+
+			// Générer le résumé
+			const result = await this.summaryService.generateSummary(
+				this.settings.summaryTemplate,
+				variables,
+				{
+					apiKey: this.settings.openaiApiKey,
+					model: this.settings.summaryModel,
+					summaryLength: this.settings.summaryLength
+				},
+				(status) => {
+					console.log('Summary status:', status);
+					if (this.recordingView) {
+						this.recordingView.updateTranscriptionStatus(status);
+					}
+				}
+			);
+
+			// Sauvegarder le résumé
+			await this.saveSummary(recording, result.text);
+
+			new Notice('Résumé généré avec succès !');
+			console.log('Résumé complété:', result);
+
+			// Retour à l'état IDLE
+			this.setRecordingState('IDLE');
+			this.updateSidebar();
+
+		} catch (error) {
+			console.error('Erreur lors de la génération du résumé:', error);
+			new Notice(`Erreur de génération du résumé: ${error.message}`);
+			
+			// Retour à l'état IDLE
+			this.setRecordingState('IDLE');
+			this.updateSidebar();
+		}
+	}
+
+	async saveSummary(recording: RecordingMetadata, summaryText: string) {
+		try {
+			// Créer le nom de fichier pour le résumé
+			const audioPath = recording.audioFile || '';
+			const summaryPath = audioPath.replace('.webm', '_summary.md');
+			
+			// Créer le contenu du résumé
+			const content = `# Résumé - ${recording.title}
+
+**Date:** ${recording.date}
+**Durée:** ${this.formatDuration(recording.duration)}
+
+---
+
+${summaryText}
+`;
+
+			// Sauvegarder le fichier de résumé
+			const existingFile = this.app.vault.getAbstractFileByPath(summaryPath);
+			if (existingFile && existingFile instanceof TFile) {
+				await this.app.vault.modify(existingFile, content);
+			} else {
+				await this.app.vault.create(summaryPath, content);
+			}
+
+			// Mettre à jour les métadonnées
+			recording.summaryFile = summaryPath;
+			recording.updatedAt = Date.now();
+			await this.saveRecordingsIndex();
+
+			console.log('Résumé sauvegardé:', summaryPath);
+
+		} catch (error) {
+			console.error('Erreur lors de la sauvegarde du résumé:', error);
+			throw error;
+		}
 	}
 }

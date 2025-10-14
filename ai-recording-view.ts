@@ -105,6 +105,7 @@ export class AIRecordingView extends ItemView {
 				break;
 			case 'UPLOADING':
 			case 'TRANSCRIBING':
+			case 'SUMMARIZING':
 				this.createProcessingButtons();
 				break;
 		}
@@ -247,7 +248,7 @@ export class AIRecordingView extends ItemView {
 		if (!this.transcriptionStatusEl) return;
 		
 		const state = this.plugin.getRecordingState();
-		if (state === 'UPLOADING' || state === 'TRANSCRIBING') {
+		if (state === 'UPLOADING' || state === 'TRANSCRIBING' || state === 'SUMMARIZING') {
 			this.transcriptionStatusEl.style.display = 'block';
 		} else {
 			this.transcriptionStatusEl.style.display = 'none';
@@ -353,7 +354,13 @@ export class AIRecordingView extends ItemView {
 		// Onglet Summary
 		const summaryContent = tabContent.createDiv('ai-recording-summary-content');
 		summaryContent.addClass('ai-recording-tab-panel', 'ai-recording-tab-panel-active');
-		summaryContent.textContent = recording.summary || 'Aucun résumé disponible';
+		
+		// Charger le résumé depuis le fichier si disponible
+		if (recording.summaryFile) {
+			this.loadSummaryContent(recording.summaryFile, summaryContent);
+		} else {
+			summaryContent.textContent = 'Aucun résumé disponible';
+		}
 		
 		// Onglet Transcript
 		const transcriptContent = tabContent.createDiv('ai-recording-transcript-content');
@@ -462,6 +469,29 @@ export class AIRecordingView extends ItemView {
 		} catch (error) {
 			console.error('Erreur lors du chargement de la transcription:', error);
 			containerEl.textContent = 'Erreur lors du chargement de la transcription';
+		}
+	}
+
+	async loadSummaryContent(summaryPath: string, containerEl: HTMLElement) {
+		try {
+			const { vault } = this.plugin.app;
+			const file = vault.getAbstractFileByPath(summaryPath);
+			
+			if (file && 'extension' in file) {
+				const content = await vault.read(file as any);
+				// Extraire seulement le texte du résumé (sans les métadonnées)
+				const lines = content.split('\n');
+				const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
+				const summaryText = separatorIndex !== -1 
+					? lines.slice(separatorIndex + 1).join('\n').trim()
+					: content;
+				containerEl.textContent = summaryText || 'Résumé vide';
+			} else {
+				containerEl.textContent = 'Fichier de résumé introuvable';
+			}
+		} catch (error) {
+			console.error('Erreur lors du chargement du résumé:', error);
+			containerEl.textContent = 'Erreur lors du chargement du résumé';
 		}
 	}
 
@@ -586,6 +616,11 @@ export class AIRecordingView extends ItemView {
 
 			.ai-recording-state.transcribing {
 				background: #9c27b0;
+				color: white;
+			}
+
+			.ai-recording-state.summarizing {
+				background: #00bcd4;
 				color: white;
 			}
 

@@ -1,5 +1,39 @@
 # Historique des Versions
 
+## Version 0.8.0 - Intégration Résumé IA avec OpenAI GPT
+**Date :** 14 Octobre 2025
+
+• **Service de résumé OpenAI GPT** : Intégration complète pour générer des résumés à partir des transcriptions
+• **Nouvel état SUMMARIZING** : Affichage visuel distinct pendant la génération du résumé (cyan)
+• **Système de variables dans templates** : Remplacement automatique de {{transcript}}, {{language}}, {{datetime}}, {{duration}}, {{title}}, {{date}}
+• **Flux automatique complet** : Enregistrement → Transcription → Résumé (si configuré)
+• **Sauvegarde en fichiers _summary.md** : Création de fichiers de résumé avec métadonnées
+• **Affichage dynamique** : Chargement et affichage des résumés dans l'onglet Summary
+• **Configuration de longueur** : Court (1-2 paragraphes), Moyen (3-5), Long (détaillé)
+• **Gestion d'erreurs robuste** : Système de retry avec 3 tentatives pour le résumé
+• **Templates personnalisables** : Template de prompt éditable dans les paramètres (déjà présent depuis 0.6)
+
+**Architecture** :
+- Nouveau fichier `summary-service.ts` avec la classe `SummaryService`
+- Méthode `generateSummary()` dans le plugin principal
+- Fonction `saveSummary()` pour créer les fichiers _summary.md
+- État étendu : `RecordingState` inclut maintenant SUMMARIZING
+- Fonction `replaceVariables()` pour le système de templates
+- Interface mise à jour avec zone de statut pour le résumé
+
+**Fichiers de résumé** :
+- Format : `Recording_YYYY-MM-DD_HH-MM-SS_summary.md`
+- Structure : Header + Métadonnées + Séparateur + Texte du résumé
+- Sauvegarde dans le même dossier que l'audio et la transcription
+- Index mis à jour avec le champ `summaryFile`
+
+**Flux complet** :
+1. Enregistrement audio → FINISHED
+2. Upload et transcription → UPLOADING → TRANSCRIBING
+3. Génération résumé → SUMMARIZING
+4. Retour → IDLE
+5. Fichiers créés : .webm (audio) + .md (transcription) + _summary.md (résumé)
+
 ## Version 0.7.0 - Intégration Transcription OpenAI Whisper
 **Date :** 14 Octobre 2025
 
