@@ -69,10 +69,75 @@ export default class AIRecordingPlugin extends Plugin {
 		// Ajouter l'onglet de paramètres
 		this.addSettingTab(new AIRecordingSettingTab(this.app, this));
 
+		// Ajouter les commandes avec raccourcis clavier
+		this.registerCommands();
+
 		// Charger l'index des enregistrements après que le workspace soit prêt
 		this.app.workspace.onLayoutReady(() => {
 			console.log('Workspace ready, loading recordings index...');
 			this.loadRecordingsIndex();
+		});
+	}
+
+	registerCommands() {
+		// Commande : Toggle Sidebar
+		this.addCommand({
+			id: 'toggle-sidebar',
+			name: 'Ouvrir/Fermer la sidebar AI Recording',
+			callback: () => {
+				this.toggleSidebar();
+			}
+		});
+
+		// Commande : Start Recording
+		this.addCommand({
+			id: 'start-recording',
+			name: 'Démarrer un enregistrement',
+			callback: async () => {
+				if (this.recordingState === 'IDLE') {
+					const hasPermission = await this.checkMicrophonePermissions();
+					if (!hasPermission) {
+						const granted = await this.requestMicrophoneAccess();
+						if (!granted) return;
+					}
+					this.setRecordingState('RECORDING');
+					new Notice('Enregistrement démarré');
+				} else {
+					new Notice('Un enregistrement est déjà en cours');
+				}
+			}
+		});
+
+		// Commande : Stop Recording
+		this.addCommand({
+			id: 'stop-recording',
+			name: 'Terminer l\'enregistrement en cours',
+			callback: () => {
+				if (this.recordingState === 'RECORDING' || this.recordingState === 'PAUSED') {
+					this.setRecordingState('FINISHED');
+					new Notice('Enregistrement terminé');
+				} else {
+					new Notice('Aucun enregistrement en cours');
+				}
+			}
+		});
+
+		// Commande : Pause/Resume Recording
+		this.addCommand({
+			id: 'pause-resume-recording',
+			name: 'Pause/Reprendre l\'enregistrement',
+			callback: () => {
+				if (this.recordingState === 'RECORDING') {
+					this.setRecordingState('PAUSED');
+					new Notice('Enregistrement en pause');
+				} else if (this.recordingState === 'PAUSED') {
+					this.resumeRecording();
+					this.setRecordingState('RECORDING');
+					new Notice('Enregistrement repris');
+				} else {
+					new Notice('Aucun enregistrement en cours');
+				}
+			}
 		});
 	}
 

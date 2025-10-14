@@ -383,6 +383,19 @@ export class AIRecordingView extends ItemView {
 		const expandButton = contentActions.createEl('button', { text: '📄 Ouvrir' });
 		expandButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
 		expandButton.onclick = () => this.openInNewNote(recording);
+
+		// Bouton de retranscription si pas de transcription
+		if (!recording.transcriptFile) {
+			const retranscribeButton = contentActions.createEl('button', { text: '🔄 Transcrire' });
+			retranscribeButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
+			retranscribeButton.title = 'Lancer la transcription de cet enregistrement';
+			retranscribeButton.onclick = async () => {
+				const confirm = window.confirm('Voulez-vous lancer la transcription de cet enregistrement ?');
+				if (confirm) {
+					await this.plugin.transcribeRecording(recording.id);
+				}
+			};
+		}
 		
 		console.log('Card created successfully for:', recording.title);
 	}
@@ -495,15 +508,87 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	openInNewNote(recording: any) {
-		// Créer une nouvelle note avec le contenu de l'enregistrement
-		const content = `# ${recording.title}\n\n**Date:** ${recording.date}\n**Durée:** ${this.formatDuration(recording.duration)}\n\n## Résumé\n\n${recording.summary || 'Aucun résumé disponible'}\n\n## Transcription\n\n${recording.transcript || 'Aucune transcription disponible'}`;
-		
-		// Ouvrir une nouvelle note dans Obsidian
-		const newFile = this.plugin.app.vault.create(`${recording.title}.md`, content);
-		if (newFile) {
-			this.plugin.app.workspace.openLinkText(newFile.path, '', true);
-			new Notice('Note créée avec le contenu de l\'enregistrement');
+	async openInNewNote(recording: any) {
+		try {
+			// Charger le contenu de la transcription depuis le fichier
+			let transcriptText = 'Aucune transcription disponible';
+			if (recording.transcriptFile) {
+				const transcriptFile = this.plugin.app.vault.getAbstractFileByPath(recording.transcriptFile);
+				if (transcriptFile && 'extension' in transcriptFile) {
+					const content = await this.plugin.app.vault.read(transcriptFile as any);
+					const lines = content.split('\n');
+					const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
+					transcriptText = separatorIndex !== -1 
+						? lines.slice(separatorIndex + 1).join('\n').trim()
+						: content;
+				}
+			}
+
+			// Charger le contenu du résumé depuis le fichier
+			let summaryText = 'Aucun résumé disponible';
+			if (recording.summaryFile) {
+				const summaryFile = this.plugin.app.vault.getAbstractFileByPath(recording.summaryFile);
+				if (summaryFile && 'extension' in summaryFile) {
+					const content = await this.plugin.app.vault.read(summaryFile as any);
+					const lines = content.split('\n');
+					const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
+					summaryText = separatorIndex !== -1 
+						? lines.slice(separatorIndex + 1).join('\n').trim()
+						: content;
+				}
+			}
+
+			// Créer le contenu de la note combinée
+			const content = `# ${recording.title}
+
+**Date:** ${recording.date}
+**Durée:** ${this.formatDuration(recording.duration)}
+**Fichier audio:** [[${recording.audioFile}]]
+
+---
+
+## 📝 Résumé
+
+${summaryText}
+
+---
+
+## 📄 Transcription Complète
+
+${transcriptText}
+
+---
+
+*Note générée automatiquement par AI Recording Plugin*
+`;
+
+			// Créer la note dans le même dossier que l'audio
+			// Extraire le dossier depuis le chemin du fichier audio
+			const audioPath = recording.audioFile || '';
+			const folderPath = audioPath.substring(0, audioPath.lastIndexOf('/'));
+			const baseFileName = audioPath.substring(audioPath.lastIndexOf('/') + 1).replace('.webm', '');
+			const noteName = `${folderPath}/${baseFileName}_combined.md`;
+			
+			const existingFile = this.plugin.app.vault.getAbstractFileByPath(noteName);
+			
+			if (existingFile) {
+				// Si la note existe déjà, demander confirmation
+				const confirmOverwrite = confirm(`La note "${baseFileName}_combined.md" existe déjà. Voulez-vous la remplacer ?`);
+				if (!confirmOverwrite) {
+					return;
+				}
+				await this.plugin.app.vault.modify(existingFile as any, content);
+			} else {
+				await this.plugin.app.vault.create(noteName, content);
+			}
+
+			// Ouvrir la note
+			await this.plugin.app.workspace.openLinkText(noteName, '', true);
+			new Notice('Note combinée créée avec succès !');
+
+		} catch (error) {
+			console.error('Erreur lors de la création de la note:', error);
+			new Notice('Erreur lors de la création de la note combinée');
 		}
 	}
 

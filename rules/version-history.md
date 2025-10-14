@@ -1,5 +1,63 @@
 # Historique des Versions
 
+## Version 0.9.1 - Organisation Unifiée des Fichiers
+**Date :** 14 Octobre 2025
+
+• **Centralisation des fichiers** : La note exportée est maintenant créée dans le dossier AI Recordings/[DATE]/ au lieu de la racine du vault
+• **Nom cohérent** : Format `Recording_YYYY-MM-DD_HH-MM-SS_combined.md` pour la note exportée
+• **Organisation améliorée** : Tous les fichiers d'un enregistrement regroupés au même endroit
+
+**Structure finale par enregistrement** :
+```
+AI Recordings/2025-10-14/
+├── Recording_2025-10-14_10-30-00.webm (audio)
+├── Recording_2025-10-14_10-30-00.md (transcription)
+├── Recording_2025-10-14_10-30-00_summary.md (résumé)
+└── Recording_2025-10-14_10-30-00_combined.md (note exportée) ← NOUVEAU
+```
+
+**Avantages** :
+- Tout est centralisé dans un seul dossier par date
+- Facilite la navigation et l'organisation
+- Les liens relatifs fonctionnent mieux
+- Cohérence dans la structure des fichiers
+
+## Version 0.9.0 - Fonctionnalités Avancées
+**Date :** 14 Octobre 2025
+
+• **Export combiné amélioré** : Création de notes complètes avec transcript + résumé chargés depuis les fichiers
+• **Bouton de retranscription** : Possibilité de lancer la transcription sur d'anciens enregistrements sans transcription
+• **Raccourcis clavier configurables** : 4 commandes enregistrées (toggle sidebar, start, stop, pause/resume)
+• **Confirmation d'écrasement** : Demande de confirmation avant d'écraser une note existante lors de l'export
+• **Lien vers fichier audio** : Les notes exportées incluent un lien Obsidian vers le fichier audio source
+• **Amélioration UX** : Interface plus complète avec emojis et meilleure organisation
+
+**Raccourcis clavier ajoutés** :
+- `Ouvrir/Fermer la sidebar AI Recording` - Basculer l'affichage de la sidebar
+- `Démarrer un enregistrement` - Lancer un nouveau enregistrement
+- `Terminer l'enregistrement en cours` - Finaliser et sauvegarder
+- `Pause/Reprendre l'enregistrement` - Toggle pause pendant l'enregistrement
+
+**Format de note exportée** :
+```markdown
+# [Titre]
+**Date:** ...
+**Durée:** ...
+**Fichier audio:** [[lien]]
+
+## 📝 Résumé
+[contenu du résumé]
+
+## 📄 Transcription Complète
+[contenu de la transcription]
+```
+
+**Architecture** :
+- Nouvelle fonction `registerCommands()` dans main.ts
+- Fonction `openInNewNote()` complètement réécrite pour charger les vrais contenus
+- Bouton conditionnel de retranscription dans les cartes d'historique
+- Gestion améliorée des fichiers existants
+
 ## Version 0.8.1 - Fix Transition État DELETED → IDLE
 **Date :** 14 Octobre 2025
 

@@ -73,9 +73,18 @@ Roadmap équilibrée pour construire et tester le plugin Obsidian AI Recording, 
 **Description** : Implémenter les raccourcis clavier configurables, créer l'export combiné (note unique avec transcript + résumé), implémenter la copie presse-papiers pour transcript/résumé, ajouter l'option de suppression automatique, créer l'architecture multi-provider, optimiser les performances et la gestion mémoire
 **Tests** : Les raccourcis clavier fonctionnent, l'export combiné crée une note complète, la copie presse-papiers marche, la suppression automatique est configurable, l'architecture multi-provider fonctionne, les performances sont optimisées
 
----
 
-## 📋 Release 1.0 - Version Production
-**Objectif** : Finaliser la version production avec tous les tests et optimisations
-**Description** : Tester tous les cas d'usage et edge cases, finaliser la documentation complète, optimiser les performances finales, tester la compatibilité sur différentes plateformes, effectuer un audit de sécurité, préparer la release publique
-**Tests** : Tous les tests des releases précédentes passent, la documentation est complète, les performances sont optimisées, le plugin fonctionne sur Windows/Mac/Linux, aucune vulnérabilité de sécurité, le plugin est prêt pour la production
+## 📋 Release 0.9.1 - Organisation Unifiée des Fichiers
+**Objectif** : Centraliser tous les fichiers d'un enregistrement dans le même dossier AI Recordings/[DATE]/
+**Description** : Modifier l'export combiné pour créer la note dans AI Recordings/[DATE]/ au lieu de la racine du vault, avec un nom cohérent (Recording_..._combined.md). Tous les fichiers d'un enregistrement (audio, transcription, résumé, note combinée) sont ainsi regroupés au même endroit.
+**Tests** : La note exportée est créée dans AI Recordings/[DATE]/, le nom suit le pattern Recording_..._combined.md, le lien audio fonctionne, tout est bien organisé dans le même dossier
+
+## 📋 Release 0.9.2 - Improve card display
+- Improve Recording card : I would like a 3 words AI generated Name for the 
+note to be the title of the card
+- Improve Recording card : only keep in the header the title of the card as 
+primary information and the date of recording + the lenght of recording as 
+secondary information
+- Improve the Processing status : it should appear not in the Zone de 
+contrôle but in the Card within the Zone historique with the list of 
+recordings
