@@ -1,5 +1,26 @@
 # Historique des Versions
 
+## Version 0.6.2 - Fix Chargement Historique et Reconstruction Auto de l'Index
+**Date :** 14 Octobre 2025
+
+• **Fix critique du chargement de l'index** : Utilisation de l'événement `onLayoutReady` pour charger l'index après que le vault soit complètement initialisé
+• **Reconstruction automatique de l'index** : Si l'index est absent, le plugin reconstruit automatiquement à partir des fichiers audio existants
+• **Suppression des enregistrements de test** : Plus de données de test dans l'historique
+• **Fix de création de sidebar** : La sidebar ne se crée plus automatiquement au démarrage (évite les erreurs de null reference)
+• **Affichage complet de l'historique** : Tous les enregistrements passés sont maintenant visibles dans l'historique
+• **Logs de debug améliorés** : Meilleure traçabilité du chargement de l'index et de la reconstruction
+
+**Problème résolu** : Le plugin chargeait l'index trop tôt, quand le vault Obsidian n'avait pas encore indexé les fichiers (0 fichiers détectés). L'index apparaissait vide même avec des enregistrements existants. Le plugin ajoutait aussi automatiquement 2 enregistrements de test.
+
+**Architecture** :
+- Utilisation de `app.workspace.onLayoutReady()` pour attendre que le vault soit prêt
+- Nouvelle fonction `rebuildRecordingsIndex()` qui scanne les fichiers .webm et reconstruit l'index
+- Suppression des fonctions de test : `addTestRecordings()`, `hasTestRecordings()`, `clearTestRecordings()`
+- Création de sidebar uniquement à la demande (via bouton ribbon)
+
+## Version 0.6.1 - (Non publiée - Développement)
+**Date :** 14 Octobre 2025
+
 ## Version 0.6.0 - Paramètres Complets
 **Date :** 10 Octobre 2025
 

@@ -47,9 +47,6 @@ export default class AIRecordingPlugin extends Plugin {
 		
 		new Notice('Plugin AI Recording chargé avec succès');
 
-		// Charger l'index des enregistrements
-		await this.loadRecordingsIndex();
-
 		// Enregistrer la vue personnalisée
 		this.registerView(AI_RECORDING_VIEW_TYPE, (leaf) => {
 			this.recordingView = new AIRecordingView(leaf, this);
@@ -64,8 +61,11 @@ export default class AIRecordingPlugin extends Plugin {
 		// Ajouter l'onglet de paramètres
 		this.addSettingTab(new AIRecordingSettingTab(this.app, this));
 
-		// Créer la sidebar au démarrage
-		this.createSidebar();
+		// Charger l'index des enregistrements après que le workspace soit prêt
+		this.app.workspace.onLayoutReady(() => {
+			console.log('Workspace ready, loading recordings index...');
+			this.loadRecordingsIndex();
+		});
 	}
 
 	async loadSettings() {
@@ -342,16 +342,77 @@ export default class AIRecordingPlugin extends Plugin {
 	async loadRecordingsIndex() {
 		try {
 			const indexFile = `${this.recordingsFolder}/recordings-index.json`;
+			console.log('Loading recordings index from:', indexFile);
+			
 			const file = this.app.vault.getAbstractFileByPath(indexFile);
 			
 			if (file && file instanceof TFile) {
 				const content = await this.app.vault.read(file);
 				this.recordingsIndex = JSON.parse(content);
+				console.log('Recordings index loaded successfully:', this.recordingsIndex.length, 'recordings');
 			} else {
-				this.recordingsIndex = [];
+				console.log('Index file not found, rebuilding from audio files...');
+				await this.rebuildRecordingsIndex();
 			}
+			
+			// Mettre à jour l'affichage si la vue est ouverte
+			this.updateSidebar();
 		} catch (error) {
 			console.error('Erreur lors du chargement de l\'index:', error);
+			this.recordingsIndex = [];
+		}
+	}
+
+	async rebuildRecordingsIndex() {
+		try {
+			// Trouver tous les fichiers audio dans le dossier d'enregistrements
+			const allFiles = this.app.vault.getFiles();
+			console.log('Total files in vault:', allFiles.length);
+			
+			const audioFiles = allFiles.filter(f => 
+				f.path.startsWith(this.recordingsFolder) && 
+				f.path.endsWith('.webm')
+			);
+			
+			console.log('Found audio files:', audioFiles.length);
+			
+			// Créer des entrées d'index pour chaque fichier audio
+			this.recordingsIndex = audioFiles.map(file => {
+				const fileName = file.name.replace('.webm', '');
+				const match = fileName.match(/Recording_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})/);
+				
+				let date = new Date().toISOString().split('T')[0];
+				let title = fileName;
+				
+				if (match) {
+					date = match[1];
+					title = `Enregistrement ${match[1]} ${match[2]}`;
+				}
+				
+				return {
+					id: `recording_${file.stat.ctime}`,
+					title: title,
+					date: date,
+					duration: 0,
+					status: 'completed' as const,
+					audioFile: file.path,
+					segments: [],
+					createdAt: file.stat.ctime,
+					updatedAt: file.stat.mtime
+				};
+			});
+			
+			// Trier du plus récent au plus ancien
+			this.recordingsIndex.sort((a, b) => b.createdAt - a.createdAt);
+			
+			console.log('Rebuilt index with', this.recordingsIndex.length, 'recordings');
+			
+			// Sauvegarder l'index via l'API Obsidian
+			if (this.recordingsIndex.length > 0) {
+				await this.saveRecordingsIndex();
+			}
+		} catch (error) {
+			console.error('Erreur lors de la reconstruction de l\'index:', error);
 			this.recordingsIndex = [];
 		}
 	}

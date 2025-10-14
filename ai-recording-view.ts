@@ -219,23 +219,10 @@ export class AIRecordingView extends ItemView {
 	updateHistoryList() {
 		this.historyList.empty();
 		
-		// Nettoyer les données de test si nécessaire
-		this.clearTestRecordings();
-		
 		const recordings = this.plugin.getRecordingsIndex();
 		console.log('Recordings from index:', recordings);
 		
-		// Ajouter des données de test SEULEMENT si aucun enregistrement ET pas de données de test déjà présentes
-		if (recordings.length === 0 && !this.hasTestRecordings()) {
-			console.log('Aucun enregistrement trouvé, ajout de données de test');
-			this.addTestRecordings();
-			const testRecordings = this.plugin.getRecordingsIndex();
-			console.log('Test recordings:', testRecordings);
-		}
-		
-		const finalRecordings = this.plugin.getRecordingsIndex();
-		
-		if (finalRecordings.length === 0) {
+		if (recordings.length === 0) {
 			this.historyList.textContent = 'Aucun enregistrement pour le moment';
 			this.historyList.className = 'ai-recording-history-list ai-recording-history-empty';
 			return;
@@ -244,55 +231,14 @@ export class AIRecordingView extends ItemView {
 		this.historyList.className = 'ai-recording-history-list';
 		
 		// Tri du plus récent au plus ancien (déjà fait dans l'index)
-		finalRecordings.forEach((recording: any) => {
+		recordings.forEach((recording: any) => {
 			console.log('Creating card for recording:', recording);
 			this.createRecordingCard(recording);
 		});
 		
-		console.log(`Historique mis à jour: ${finalRecordings.length} enregistrements affichés`);
+		console.log(`Historique mis à jour: ${recordings.length} enregistrements affichés`);
 	}
 
-	hasTestRecordings(): boolean {
-		// Vérifier si des données de test sont déjà présentes
-		const recordings = this.plugin.getRecordingsIndex();
-		return recordings.some((recording: any) => recording.id.startsWith('test-'));
-	}
-
-	addTestRecordings() {
-		// Ajouter des enregistrements de test pour diagnostiquer
-		const testRecordings = [
-			{
-				id: 'test-1',
-				title: 'Test Recording 1',
-				date: '2025-10-02',
-				duration: 120000, // 2 minutes
-				status: 'completed',
-				audioFile: 'test-audio-1.webm',
-				summary: 'Ceci est un résumé de test pour diagnostiquer l\'affichage des cartes.',
-				transcript: 'Ceci est une transcription de test pour vérifier que les onglets fonctionnent correctement.',
-				segments: [] as Array<{start: number, end: number}>,
-				createdAt: Date.now() - 3600000, // 1 heure ago
-				updatedAt: Date.now() - 3600000
-			},
-			{
-				id: 'test-2',
-				title: 'Test Recording 2',
-				date: '2025-10-02',
-				duration: 180000, // 3 minutes
-				status: 'processing',
-				audioFile: 'test-audio-2.webm',
-				summary: 'Résumé de test numéro 2 avec du contenu plus long pour tester l\'affichage des cartes expansibles.',
-				transcript: 'Transcription de test numéro 2 avec plusieurs lignes de texte pour vérifier le scroll et l\'affichage correct.',
-				segments: [] as Array<{start: number, end: number}>,
-				createdAt: Date.now() - 7200000, // 2 heures ago
-				updatedAt: Date.now() - 7200000
-			}
-		];
-		
-		// Ajouter les enregistrements de test à l'index
-		this.plugin.recordingsIndex = testRecordings;
-		this.plugin.saveRecordingsIndex();
-	}
 
 	formatDuration(milliseconds: number): string {
 		const minutes = Math.floor(milliseconds / 60000);
@@ -464,17 +410,6 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	clearTestRecordings() {
-		// Nettoyer les données de test quand de vrais enregistrements sont ajoutés
-		const recordings = this.plugin.getRecordingsIndex();
-		const realRecordings = recordings.filter((recording: any) => !recording.id.startsWith('test-'));
-		
-		if (realRecordings.length > 0 && recordings.length !== realRecordings.length) {
-			console.log('Nettoyage des données de test, conservation des vrais enregistrements');
-			this.plugin.recordingsIndex = realRecordings;
-			this.plugin.saveRecordingsIndex();
-		}
-	}
 
 	confirmDeleteRecording(recording: any) {
 		const modal = document.createElement('div');
