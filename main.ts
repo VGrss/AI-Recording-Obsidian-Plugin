@@ -165,10 +165,22 @@ export default class AIRecordingPlugin extends Plugin {
 		const existingLeaf = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE)[0];
 		
 		if (existingLeaf) {
-			// La vue existe, la révéler
+			// La vue existe, s'assurer que la sidebar droite est ouverte et révéler la vue
+			const rightSplit = workspace.rightSplit;
+			if (rightSplit && rightSplit.collapsed) {
+				// Ouvrir la sidebar droite si elle est fermée
+				workspace.rightSplit.expand();
+			}
 			workspace.revealLeaf(existingLeaf);
 			this.sidebar = existingLeaf;
 		} else {
+			// S'assurer que la sidebar droite est ouverte
+			const rightSplit = workspace.rightSplit;
+			if (rightSplit && rightSplit.collapsed) {
+				// Ouvrir la sidebar droite si elle est fermée
+				workspace.rightSplit.expand();
+			}
+			
 			// Créer un nouveau leaf dans la sidebar droite
 			const leaf = workspace.getRightLeaf(false);
 			if (leaf) {
