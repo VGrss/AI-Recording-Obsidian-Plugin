@@ -13,6 +13,7 @@ export class AIRecordingView extends ItemView {
 	buttonContainer: HTMLElement;
 	historyList: HTMLElement;
 	timerInterval: NodeJS.Timeout | null = null;
+	transcriptionStatusEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: any) {
 		super(leaf);
@@ -64,6 +65,10 @@ export class AIRecordingView extends ItemView {
 		this.timerDisplay = this.controlZone.createDiv('ai-recording-timer');
 		this.timerDisplay.textContent = '00:00';
 
+		// Statut de transcription
+		this.transcriptionStatusEl = this.controlZone.createDiv('ai-recording-transcription-status');
+		this.transcriptionStatusEl.style.display = 'none';
+
 		// Boutons de contrôle
 		this.buttonContainer = this.controlZone.createDiv('ai-recording-buttons');
 		this.updateButtons();
@@ -97,6 +102,10 @@ export class AIRecordingView extends ItemView {
 				break;
 			case 'FINISHED':
 				this.createFinishedButtons();
+				break;
+			case 'UPLOADING':
+			case 'TRANSCRIBING':
+				this.createProcessingButtons();
 				break;
 		}
 	}
@@ -152,6 +161,16 @@ export class AIRecordingView extends ItemView {
 		const newButton = this.buttonContainer.createEl('button', { text: 'Nouvel Enregistrement' });
 		newButton.addClass('ai-recording-btn', 'ai-recording-btn-primary');
 		newButton.onclick = () => this.plugin.setRecordingState('IDLE');
+	}
+
+	createProcessingButtons() {
+		const processingText = this.buttonContainer.createEl('div', { 
+			text: 'Traitement en cours...' 
+		});
+		processingText.addClass('ai-recording-processing-text');
+		processingText.style.fontStyle = 'italic';
+		processingText.style.color = 'var(--text-muted)';
+		processingText.style.padding = '8px';
 	}
 
 	confirmFinishRecording() {
@@ -214,6 +233,25 @@ export class AIRecordingView extends ItemView {
 		this.updateButtons();
 		this.updateTimer();
 		this.updateHistoryList();
+		this.updateTranscriptionStatusVisibility();
+	}
+
+	updateTranscriptionStatus(status: string) {
+		if (this.transcriptionStatusEl) {
+			this.transcriptionStatusEl.textContent = status;
+			this.transcriptionStatusEl.style.display = 'block';
+		}
+	}
+
+	updateTranscriptionStatusVisibility() {
+		if (!this.transcriptionStatusEl) return;
+		
+		const state = this.plugin.getRecordingState();
+		if (state === 'UPLOADING' || state === 'TRANSCRIBING') {
+			this.transcriptionStatusEl.style.display = 'block';
+		} else {
+			this.transcriptionStatusEl.style.display = 'none';
+		}
 	}
 
 	updateHistoryList() {
@@ -320,7 +358,13 @@ export class AIRecordingView extends ItemView {
 		// Onglet Transcript
 		const transcriptContent = tabContent.createDiv('ai-recording-transcript-content');
 		transcriptContent.addClass('ai-recording-tab-panel');
-		transcriptContent.textContent = recording.transcript || 'Aucune transcription disponible';
+		
+		// Charger la transcription depuis le fichier si disponible
+		if (recording.transcriptFile) {
+			this.loadTranscriptContent(recording.transcriptFile, transcriptContent);
+		} else {
+			transcriptContent.textContent = 'Aucune transcription disponible';
+		}
 		
 		// Actions dans le contenu
 		const contentActions = content.createDiv('ai-recording-card-content-actions');
@@ -395,6 +439,29 @@ export class AIRecordingView extends ItemView {
 				console.error('Erreur lors de la copie:', err);
 				new Notice('Erreur lors de la copie');
 			});
+		}
+	}
+
+	async loadTranscriptContent(transcriptPath: string, containerEl: HTMLElement) {
+		try {
+			const { vault } = this.plugin.app;
+			const file = vault.getAbstractFileByPath(transcriptPath);
+			
+			if (file && 'extension' in file) {
+				const content = await vault.read(file as any);
+				// Extraire seulement le texte de la transcription (sans les métadonnées)
+				const lines = content.split('\n');
+				const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
+				const transcriptText = separatorIndex !== -1 
+					? lines.slice(separatorIndex + 1).join('\n').trim()
+					: content;
+				containerEl.textContent = transcriptText || 'Transcription vide';
+			} else {
+				containerEl.textContent = 'Fichier de transcription introuvable';
+			}
+		} catch (error) {
+			console.error('Erreur lors du chargement de la transcription:', error);
+			containerEl.textContent = 'Erreur lors du chargement de la transcription';
 		}
 	}
 
@@ -512,12 +579,32 @@ export class AIRecordingView extends ItemView {
 				color: white;
 			}
 
+			.ai-recording-state.uploading {
+				background: #2196f3;
+				color: white;
+			}
+
+			.ai-recording-state.transcribing {
+				background: #9c27b0;
+				color: white;
+			}
+
 			.ai-recording-timer {
 				font-size: 24px;
 				font-weight: bold;
 				color: var(--text-normal);
 				margin-bottom: 16px;
 				font-family: monospace;
+			}
+
+			.ai-recording-transcription-status {
+				font-size: 13px;
+				color: var(--text-muted);
+				margin-bottom: 12px;
+				padding: 8px;
+				background: var(--background-primary);
+				border-radius: 4px;
+				border: 1px solid var(--background-modifier-border);
 			}
 
 			.ai-recording-buttons {

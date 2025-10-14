@@ -1,5 +1,33 @@
 # Historique des Versions
 
+## Version 0.7.0 - Intégration Transcription OpenAI Whisper
+**Date :** 14 Octobre 2025
+
+• **Service de transcription OpenAI Whisper** : Intégration complète de l'API Whisper pour la transcription automatique
+• **Nouveaux états de traitement** : UPLOADING et TRANSCRIBING avec affichage visuel distinct
+• **Gestion d'erreurs robuste** : Système de retry avec 3 tentatives automatiques en cas d'échec
+• **Upload sécurisé** : Validation de la taille des fichiers (25 MB max) et gestion FormData
+• **Transcription automatique** : Déclenchement automatique après la fin d'un enregistrement si OpenAI configuré
+• **Sauvegarde en fichiers .md** : Création de fichiers de transcription avec métadonnées (date, durée, langue détectée)
+• **Affichage dynamique** : Chargement et affichage des transcriptions dans l'onglet Transcript des cartes
+• **Statut de progression** : Messages en temps réel du processus de transcription
+• **Support multilingue** : Auto-détection ou choix manuel de la langue
+• **Format verbose_json** : Récupération de la langue détectée et de la durée
+
+**Architecture** :
+- Nouveau fichier `transcription-service.ts` avec la classe `TranscriptionService`
+- Méthode `transcribeRecording()` dans le plugin principal
+- Fonction `saveTranscription()` pour créer les fichiers .md
+- États étendus : `RecordingState` inclut maintenant UPLOADING et TRANSCRIBING
+- Interface mise à jour avec zone de statut de transcription
+- Gestion des clés API OpenAI depuis les paramètres
+
+**Fichiers de transcription** :
+- Format : `Recording_YYYY-MM-DD_HH-MM-SS.md`
+- Structure : Header + Métadonnées + Séparateur + Texte de transcription
+- Sauvegarde dans le même dossier que l'audio
+- Index mis à jour avec le champ `transcriptFile`
+
 ## Version 0.6.2 - Fix Chargement Historique et Reconstruction Auto de l'Index
 **Date :** 14 Octobre 2025
 

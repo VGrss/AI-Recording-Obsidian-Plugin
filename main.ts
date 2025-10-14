@@ -1,8 +1,9 @@
 import { Plugin, Notice, WorkspaceLeaf, TFile } from 'obsidian';
 import { AIRecordingView, AI_RECORDING_VIEW_TYPE } from './ai-recording-view';
 import { AIRecordingSettings, DEFAULT_SETTINGS, AIRecordingSettingTab } from './settings';
+import { TranscriptionService } from './transcription-service';
 
-export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED';
+export type RecordingState = 'IDLE' | 'RECORDING' | 'PAUSED' | 'FINISHED' | 'DELETED' | 'UPLOADING' | 'TRANSCRIBING';
 
 export interface RecordingMetadata {
 	id: string;
@@ -35,6 +36,7 @@ export default class AIRecordingPlugin extends Plugin {
 	audioStream: MediaStream | null = null;
 	recordingsIndex: RecordingMetadata[] = [];
 	recordingsFolder: string = 'AI Recordings';
+	transcriptionService: TranscriptionService;
 
 	async onload() {
 		console.log('Plugin AI Recording chargé');
@@ -44,6 +46,9 @@ export default class AIRecordingPlugin extends Plugin {
 		
 		// Mettre à jour le dossier d'enregistrements depuis les paramètres
 		this.recordingsFolder = this.settings.recordingsFolder;
+		
+		// Initialiser le service de transcription
+		this.transcriptionService = new TranscriptionService();
 		
 		new Notice('Plugin AI Recording chargé avec succès');
 
@@ -262,7 +267,7 @@ export default class AIRecordingPlugin extends Plugin {
 			}
 			
 			// Sauvegarder l'enregistrement
-			await this.saveRecording();
+			const recordingId = await this.saveRecording();
 			
 			// Rafraîchir l'historique après sauvegarde
 			this.updateSidebar();
@@ -270,6 +275,11 @@ export default class AIRecordingPlugin extends Plugin {
 			// Marquer l'enregistrement comme terminé
 			new Notice('Enregistrement terminé et sauvegardé');
 			console.log('Enregistrement terminé:', this.currentRecording);
+			
+			// Démarrer la transcription si configuré
+			if (recordingId && this.settings.transcriptionProvider === 'openai') {
+				await this.transcribeRecording(recordingId);
+			}
 		}
 	}
 
@@ -396,7 +406,7 @@ export default class AIRecordingPlugin extends Plugin {
 					duration: 0,
 					status: 'completed' as const,
 					audioFile: file.path,
-					segments: [],
+					segments: [] as Array<{start: number, end: number}>,
 					createdAt: file.stat.ctime,
 					updatedAt: file.stat.mtime
 				};
@@ -443,10 +453,10 @@ export default class AIRecordingPlugin extends Plugin {
 		}
 	}
 
-	async saveRecording() {
+	async saveRecording(): Promise<string | null> {
 		if (!this.currentRecording || !this.currentRecording.audioBlob) {
 			console.error('Aucun enregistrement à sauvegarder');
-			return;
+			return null;
 		}
 
 		try {
@@ -502,9 +512,12 @@ export default class AIRecordingPlugin extends Plugin {
 			
 			console.log('Enregistrement sauvegardé:', metadata);
 			
+			return this.currentRecording.id;
+			
 		} catch (error) {
 			console.error('Erreur lors de la sauvegarde:', error);
 			new Notice('Erreur lors de la sauvegarde de l\'enregistrement');
+			return null;
 		}
 	}
 
@@ -573,5 +586,137 @@ export default class AIRecordingPlugin extends Plugin {
 		}
 		console.log('État d\'enregistrement:', this.recordingState);
 		console.log('Nombre d\'enregistrements dans l\'index:', this.recordingsIndex.length);
+	}
+
+	async transcribeRecording(recordingId: string) {
+		try {
+			// Trouver l'enregistrement dans l'index
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (!recording) {
+				console.error('Enregistrement non trouvé:', recordingId);
+				return;
+			}
+
+			// Vérifier la clé API
+			if (!this.settings.openaiApiKey || this.settings.openaiApiKey.trim() === '') {
+				new Notice('Clé API OpenAI manquante. Veuillez la configurer dans les paramètres.');
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
+				this.updateSidebar();
+				return;
+			}
+
+			// Mettre à jour le statut
+			recording.status = 'processing';
+			await this.saveRecordingsIndex();
+			this.setRecordingState('UPLOADING');
+
+			// Lire le fichier audio
+			if (!recording.audioFile) {
+				throw new Error('Fichier audio manquant');
+			}
+
+			const audioFile = this.app.vault.getAbstractFileByPath(recording.audioFile);
+			if (!audioFile || !(audioFile instanceof TFile)) {
+				throw new Error('Fichier audio introuvable');
+			}
+
+			const audioBuffer = await this.app.vault.readBinary(audioFile);
+			const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+
+			// Passer à l'état TRANSCRIBING
+			this.setRecordingState('TRANSCRIBING');
+
+			// Effectuer la transcription
+			const result = await this.transcriptionService.transcribeAudio(
+				audioBlob,
+				{
+					apiKey: this.settings.openaiApiKey,
+					model: this.settings.transcriptionModel,
+					language: this.settings.transcriptionLanguage,
+					responseFormat: 'verbose_json'
+				},
+				(status) => {
+					console.log('Transcription status:', status);
+					if (this.recordingView) {
+						this.recordingView.updateTranscriptionStatus(status);
+					}
+				}
+			);
+
+			// Sauvegarder la transcription
+			await this.saveTranscription(recording, result.text, result.language);
+
+			// Mettre à jour le statut
+			recording.status = 'completed';
+			await this.saveRecordingsIndex();
+			
+			new Notice('Transcription terminée avec succès !');
+			console.log('Transcription complétée:', result);
+
+			// Retour à l'état IDLE
+			this.setRecordingState('IDLE');
+			this.updateSidebar();
+
+		} catch (error) {
+			console.error('Erreur lors de la transcription:', error);
+			new Notice(`Erreur de transcription: ${error.message}`);
+			
+			// Mettre à jour le statut d'erreur
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (recording) {
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
+			}
+
+			// Retour à l'état IDLE
+			this.setRecordingState('IDLE');
+			this.updateSidebar();
+		}
+	}
+
+	async saveTranscription(recording: RecordingMetadata, transcriptText: string, language?: string) {
+		try {
+			// Créer le nom de fichier pour la transcription
+			const audioPath = recording.audioFile || '';
+			const transcriptPath = audioPath.replace('.webm', '.md');
+			
+			// Créer le contenu de la transcription
+			const content = `# Transcription - ${recording.title}
+
+**Date:** ${recording.date}
+**Durée:** ${this.formatDuration(recording.duration)}
+${language ? `**Langue:** ${language}` : ''}
+
+---
+
+${transcriptText}
+`;
+
+			// Sauvegarder le fichier de transcription
+			const existingFile = this.app.vault.getAbstractFileByPath(transcriptPath);
+			if (existingFile && existingFile instanceof TFile) {
+				await this.app.vault.modify(existingFile, content);
+			} else {
+				await this.app.vault.create(transcriptPath, content);
+			}
+
+			// Mettre à jour les métadonnées
+			recording.transcriptFile = transcriptPath;
+			recording.updatedAt = Date.now();
+			await this.saveRecordingsIndex();
+
+			console.log('Transcription sauvegardée:', transcriptPath);
+
+		} catch (error) {
+			console.error('Erreur lors de la sauvegarde de la transcription:', error);
+			throw error;
+		}
+	}
+
+	formatDuration(milliseconds: number): string {
+		const minutes = Math.floor(milliseconds / 60000);
+		const seconds = Math.floor((milliseconds % 60000) / 1000);
+		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 	}
 }
