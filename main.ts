@@ -63,7 +63,6 @@ export default class AIRecordingPlugin extends Plugin {
 
 		// Ajouter le bouton microphone dans le ribbon
 		this.addRibbonIcon('mic', 'AI Recording', async () => {
-			console.log('🎤 [DEBUG] Clic sur l\'icône microphone détecté');
 			await this.toggleSidebar();
 		});
 
@@ -162,58 +161,41 @@ export default class AIRecordingPlugin extends Plugin {
 	async createSidebar() {
 		const { workspace } = this.app;
 		
-		console.log('🔍 [DEBUG] createSidebar appelée');
-		
 		// Vérifier l'état de la sidebar droite et l'ouvrir si nécessaire
 		// @ts-ignore
 		const isRightSidebarCollapsed = workspace.rightSplit?.collapsed;
-		console.log('🔍 [DEBUG] Sidebar droite collapsed ?', isRightSidebarCollapsed);
-		console.log('🔍 [DEBUG] workspace.rightSplit existe ?', !!workspace.rightSplit);
 		
 		if (isRightSidebarCollapsed) {
-			console.log('🔍 [DEBUG] Tentative d\'ouverture de la sidebar droite...');
 			// Ouvrir la sidebar droite si elle est fermée
 			// @ts-ignore
 			this.app.commands.executeCommandById('app:toggle-right-sidebar');
 			// Petit délai pour laisser la sidebar s'ouvrir
 			await new Promise(resolve => setTimeout(resolve, 100));
-			console.log('🔍 [DEBUG] Commande toggle-right-sidebar exécutée');
 		}
 		
 		// Vérifier si une vue existe déjà
 		const existing = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE);
-		console.log('🔍 [DEBUG] Vues existantes du plugin:', existing.length);
 		
 		if (existing.length > 0) {
-			console.log('🔍 [DEBUG] Vue existante trouvée, révélation...');
 			workspace.revealLeaf(existing[0]);
 			this.sidebar = existing[0];
-			console.log('🔍 [DEBUG] Vue révélée avec succès');
 			return;
 		}
 		
 		// Créer dans la sidebar droite
-		console.log('🔍 [DEBUG] Création d\'un nouveau leaf...');
 		const leaf = workspace.getRightLeaf(false);
-		console.log('🔍 [DEBUG] Leaf obtenu:', !!leaf);
 		
 		if (leaf) {
-			console.log('🔍 [DEBUG] Configuration du viewState...');
 			await leaf.setViewState({
 				type: AI_RECORDING_VIEW_TYPE,
 				active: true,
 			});
-			console.log('🔍 [DEBUG] ViewState configuré, révélation du leaf...');
 			workspace.revealLeaf(leaf);
 			this.sidebar = leaf;
-			console.log('🔍 [DEBUG] Sidebar créée et révélée avec succès');
-		} else {
-			console.error('❌ [ERROR] Impossible d\'obtenir un leaf dans la sidebar droite');
 		}
 	}
 
 	async toggleSidebar() {
-		console.log('🔍 [DEBUG] toggleSidebar appelée');
 		await this.createSidebar();
 	}
 
