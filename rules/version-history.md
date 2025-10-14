@@ -1,5 +1,26 @@
 # Historique des Versions
 
+## Version 0.9.2 - Lecteur Audio Intégré
+**Date :** 14 Octobre 2025
+
+• **Lecteur audio embed** : La note combinée affiche maintenant un lecteur audio intégré avec `![[fichier.webm]]`
+• **Section Audio dédiée** : Nouvelle section "🎵 Audio" avec le player intégré
+• **Expérience améliorée** : Écoute directe depuis la note sans ouvrir le fichier audio séparément
+• **Format optimisé** : Meilleure organisation visuelle de la note combinée
+
+**Avant** :
+```markdown
+**Fichier audio:** [[Recording_....webm]]  (lien simple)
+```
+
+**Après** :
+```markdown
+## 🎵 Audio
+![[Recording_....webm]]  (lecteur intégré)
+```
+
+**Avantage** : La note devient vraiment "tout-en-un" avec le lecteur audio directement accessible.
+
 ## Version 0.9.1 - Organisation Unifiée des Fichiers
 **Date :** 14 Octobre 2025
 

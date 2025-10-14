@@ -543,7 +543,10 @@ export class AIRecordingView extends ItemView {
 
 **Date:** ${recording.date}
 **Durée:** ${this.formatDuration(recording.duration)}
-**Fichier audio:** [[${recording.audioFile}]]
+
+## 🎵 Audio
+
+![[${recording.audioFile}]]
 
 ---
 
