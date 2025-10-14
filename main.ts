@@ -798,6 +798,35 @@ ${transcriptText}
 		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 	}
 
+	async generateAITitle(recordingId: string, transcriptText: string) {
+		try {
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (!recording) return;
+
+			// Générer le titre AI en 3 mots
+			const aiTitle = await this.summaryService.generateShortTitle(
+				transcriptText,
+				this.settings.openaiApiKey,
+				'gpt-4o-mini'
+			);
+
+			// Utiliser la durée de l'enregistrement au format MM:SS
+			const durationStr = this.formatDuration(recording.duration);
+
+			// Nouveau format: "Titre AI - MM:SS"
+			recording.title = `${aiTitle} - ${durationStr}`;
+			recording.updatedAt = Date.now();
+			
+			await this.saveRecordingsIndex();
+			this.updateSidebar();
+			
+			console.log('Titre AI généré:', recording.title);
+		} catch (error) {
+			console.error('Erreur lors de la génération du titre AI:', error);
+			// On continue sans bloquer en cas d'erreur
+		}
+	}
+
 	async generateSummary(recordingId: string, transcriptText: string) {
 		try {
 			// Trouver l'enregistrement dans l'index
@@ -850,6 +879,9 @@ ${transcriptText}
 
 			new Notice('Résumé généré avec succès !');
 			console.log('Résumé complété:', result);
+
+			// Générer le titre AI en 3 mots
+			await this.generateAITitle(recordingId, transcriptText);
 
 			// Retour à l'état IDLE
 			this.setRecordingState('IDLE');

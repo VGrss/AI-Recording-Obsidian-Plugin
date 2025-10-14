@@ -231,5 +231,61 @@ export class SummaryService {
 		
 		return transcriptContent;
 	}
+
+	/**
+	 * Génère un titre court en 3 mots à partir d'une transcription
+	 */
+	async generateShortTitle(
+		transcriptText: string,
+		apiKey: string,
+		model: string = 'gpt-4o-mini'
+	): Promise<string> {
+		try {
+			if (!apiKey || apiKey.trim() === '') {
+				throw new Error('Clé API OpenAI manquante');
+			}
+
+			// Limiter la transcription pour l'analyse (premiers 500 caractères)
+			const textSample = transcriptText.substring(0, 500);
+
+			const response = await fetch(this.OPENAI_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${apiKey}`,
+				},
+				body: JSON.stringify({
+					model: model,
+					messages: [
+						{
+							role: 'system',
+							content: 'Tu es un assistant qui génère des titres courts et pertinents. Réponds UNIQUEMENT avec 3 mots maximum, sans ponctuation, sans guillemets, juste les 3 mots.'
+						},
+						{
+							role: 'user',
+							content: `Génère un titre de 3 mots maximum qui résume cette transcription:\n\n${textSample}`
+						}
+					],
+					temperature: 0.7,
+					max_tokens: 20
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error(`Erreur API: ${response.status}`);
+			}
+
+			const result = await response.json();
+			const title = result.choices[0]?.message?.content?.trim() || 'Enregistrement Audio';
+			
+			// S'assurer que c'est bien 3 mots maximum
+			const words = title.split(/\s+/).slice(0, 3);
+			return words.join(' ');
+
+		} catch (error) {
+			console.error('Erreur lors de la génération du titre:', error);
+			return 'Enregistrement Audio'; // Titre par défaut
+		}
+	}
 }
 

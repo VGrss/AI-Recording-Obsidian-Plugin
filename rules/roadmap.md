@@ -95,4 +95,4 @@ secondary information
 - Improve the Processing status : it should appear not in the Zone de 
 contrôle but in the Card within the Zone historique with the list of 
 recordings
-- Improve the saving of the Recording on Notion so that the Title of the rec
+- Improve the saving of the Recording on Notion so that the Title of the recording is : 

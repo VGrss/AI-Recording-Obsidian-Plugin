@@ -295,19 +295,32 @@ export class AIRecordingView extends ItemView {
 		const header = card.createDiv('ai-recording-card-header');
 		header.onclick = () => this.toggleCardExpansion(card);
 		
-		// Titre avec icône d'expansion
-		const titleRow = header.createDiv('ai-recording-card-title-row');
+		// Container principal du header
+		const headerMain = header.createDiv('ai-recording-header-main');
+		
+		// Titre en primaire avec icône d'expansion
+		const titleRow = headerMain.createDiv('ai-recording-card-title-row');
 		const expandIcon = titleRow.createEl('span', { text: '▶' });
 		expandIcon.addClass('ai-recording-expand-icon');
 		
-		const title = titleRow.createEl('h5', { text: recording.title });
+		const title = titleRow.createEl('h4', { text: recording.title });
 		title.addClass('ai-recording-card-title');
 		
-		// Métadonnées
-		const meta = header.createDiv('ai-recording-card-meta');
-		meta.createEl('span', { text: recording.date, cls: 'ai-recording-date' });
-		meta.createEl('span', { text: this.formatDuration(recording.duration), cls: 'ai-recording-duration' });
-		meta.createEl('span', { text: recording.status, cls: `ai-recording-status ai-recording-status-${recording.status}` });
+		// Métadonnées secondaires (date + durée)
+		const meta = headerMain.createDiv('ai-recording-card-meta');
+		const dateText = meta.createEl('span', { text: recording.date });
+		dateText.addClass('ai-recording-meta-text');
+		const separator = meta.createEl('span', { text: ' • ' });
+		separator.addClass('ai-recording-meta-separator');
+		const durationText = meta.createEl('span', { text: this.formatDuration(recording.duration) });
+		durationText.addClass('ai-recording-meta-text');
+		
+		// Statut de processing si applicable (dans la carte)
+		if (recording.status === 'processing') {
+			const statusBadge = headerMain.createDiv('ai-recording-status-badge');
+			statusBadge.addClass('ai-recording-status-processing-badge');
+			statusBadge.textContent = '⏳ En traitement...';
+		}
 		
 		// Actions dans le header
 		const headerActions = header.createDiv('ai-recording-card-header-actions');
@@ -834,47 +847,70 @@ ${transcriptText}
 				transition: background 0.2s ease;
 				display: flex;
 				justify-content: space-between;
-				align-items: center;
+				align-items: flex-start;
 			}
 
 			.ai-recording-card-header:hover {
 				background: var(--background-secondary);
 			}
 
+			.ai-recording-header-main {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+
 			.ai-recording-card-title-row {
 				display: flex;
 				align-items: center;
 				gap: 8px;
-				flex: 1;
 			}
 
 			.ai-recording-expand-icon {
-				font-size: 12px;
+				font-size: 10px;
 				color: var(--text-muted);
 				transition: transform 0.2s ease;
+				margin-top: 2px;
 			}
 
 			.ai-recording-card-title {
 				margin: 0;
-				font-size: 14px;
+				font-size: 16px;
 				font-weight: 600;
 				color: var(--text-normal);
+				line-height: 1.3;
 			}
 
 			.ai-recording-card-meta {
 				display: flex;
-				gap: 12px;
+				align-items: center;
+				gap: 4px;
+				margin-left: 18px;
+			}
+
+			.ai-recording-meta-text {
 				font-size: 12px;
 				color: var(--text-muted);
-				margin-left: 16px;
+				font-weight: 400;
 			}
 
-			.ai-recording-date {
+			.ai-recording-meta-separator {
+				font-size: 12px;
+				color: var(--text-faint);
+			}
+
+			.ai-recording-status-processing-badge {
+				margin-left: 18px;
+				margin-top: 4px;
+				padding: 4px 10px;
+				border-radius: 12px;
+				font-size: 11px;
 				font-weight: 500;
-			}
-
-			.ai-recording-duration {
-				font-family: monospace;
+				background: #ff9800;
+				color: white;
+				display: inline-block;
+				width: fit-content;
 			}
 
 			.ai-recording-status {

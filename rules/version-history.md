@@ -1,5 +1,30 @@
 # Historique des Versions
 
+## Version 0.9.3 - Titres AI et Interface Améliorée
+**Date :** 14 Octobre 2025
+
+• **Titres AI générés** : Génération automatique d'un titre en 3 mots à partir de la transcription via GPT-4o-mini
+• **Format de titre optimisé** : "Titre AI (3 mots) - MM:SS" avec la durée de l'enregistrement
+• **Header simplifié** : Titre en primaire (plus grand, 16px), date + durée en secondaire avec séparateur "•"
+• **Statut de processing dans les cartes** : Le badge "⏳ En traitement..." s'affiche dans la carte individuelle
+• **Mise en page améliorée** : Header vertical avec meilleure hiérarchie visuelle
+
+**Exemple de titre généré** :
+- Avant : `Enregistrement 2025-10-14 10:30:00`
+- Après : `Réunion Projet - 5:23` (titre AI contextuel + durée)
+
+**Flux de génération du titre** :
+1. Transcription complétée
+2. Résumé généré
+3. Titre AI généré (3 mots via GPT-4o-mini)
+4. Format final : `[Titre AI] - [Durée]`
+
+**Architecture** :
+- Nouvelle fonction `generateShortTitle()` dans summary-service.ts
+- Nouvelle fonction `generateAITitle()` dans main.ts
+- Header redesigné avec structure verticale
+- Styles CSS améliorés pour la hiérarchie visuelle
+
 ## Version 0.9.2 - Lecteur Audio Intégré
 **Date :** 14 Octobre 2025
 
