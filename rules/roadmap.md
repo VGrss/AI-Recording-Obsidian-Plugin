@@ -79,7 +79,14 @@ Roadmap équilibrée pour construire et tester le plugin Obsidian AI Recording, 
 **Description** : Modifier l'export combiné pour créer la note dans AI Recordings/[DATE]/ au lieu de la racine du vault, avec un nom cohérent (Recording_..._combined.md). Tous les fichiers d'un enregistrement (audio, transcription, résumé, note combinée) sont ainsi regroupés au même endroit.
 **Tests** : La note exportée est créée dans AI Recordings/[DATE]/, le nom suit le pattern Recording_..._combined.md, le lien audio fonctionne, tout est bien organisé dans le même dossier
 
-## 📋 Release 0.9.2 - Improve card display
+## 📋 Release 0.9.2 - Lecteur Audio Intégré
+**Objectif** : Intégrer un lecteur audio directement dans la note combinée
+**Description** : Remplacer le simple lien `[[fichier.webm]]` par un embed `![[fichier.webm]]` pour afficher un lecteur audio intégré. Ajouter une section "🎵 Audio" dédiée avec le player. L'utilisateur peut écouter l'enregistrement directement depuis la note sans ouvrir le fichier séparément.
+**Tests** : Le lecteur audio s'affiche dans la note combinée, le player fonctionne (play/pause/timeline), l'audio est lisible directement depuis la note, la section Audio est bien visible avec emoji
+
+---
+
+## 📋 Release 0.9.3 - Improve card display
 - Improve Recording card : I would like a 3 words AI generated Name for the 
 note to be the title of the card
 - Improve Recording card : only keep in the header the title of the card as 
@@ -88,3 +95,4 @@ secondary information
 - Improve the Processing status : it should appear not in the Zone de 
 contrôle but in the Card within the Zone historique with the list of 
 recordings
+- Improve the saving of the Recording on Notion so that the Title of the rec
