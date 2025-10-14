@@ -161,36 +161,35 @@ export default class AIRecordingPlugin extends Plugin {
 	async createSidebar() {
 		const { workspace } = this.app;
 		
-		// Vérifier s'il existe déjà une vue de ce type
-		const existingLeaf = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE)[0];
+		// Vérifier l'état de la sidebar droite et l'ouvrir si nécessaire
+		// @ts-ignore
+		const isRightSidebarCollapsed = workspace.rightSplit?.collapsed;
 		
-		if (existingLeaf) {
-			// La vue existe, s'assurer que la sidebar droite est ouverte et révéler la vue
-			const rightSplit = workspace.rightSplit;
-			if (rightSplit && rightSplit.collapsed) {
-				// Ouvrir la sidebar droite si elle est fermée
-				workspace.rightSplit.expand();
-			}
-			workspace.revealLeaf(existingLeaf);
-			this.sidebar = existingLeaf;
-		} else {
-			// S'assurer que la sidebar droite est ouverte
-			const rightSplit = workspace.rightSplit;
-			if (rightSplit && rightSplit.collapsed) {
-				// Ouvrir la sidebar droite si elle est fermée
-				workspace.rightSplit.expand();
-			}
-			
-			// Créer un nouveau leaf dans la sidebar droite
-			const leaf = workspace.getRightLeaf(false);
-			if (leaf) {
-				await leaf.setViewState({
-					type: AI_RECORDING_VIEW_TYPE,
-					active: true,
-				});
-				this.sidebar = leaf;
-				workspace.revealLeaf(leaf);
-			}
+		if (isRightSidebarCollapsed) {
+			// Ouvrir la sidebar droite si elle est fermée
+			// @ts-ignore
+			this.app.commands.executeCommandById('app:toggle-right-sidebar');
+			// Petit délai pour laisser la sidebar s'ouvrir
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		
+		// Vérifier si une vue existe déjà
+		const existing = workspace.getLeavesOfType(AI_RECORDING_VIEW_TYPE);
+		if (existing.length > 0) {
+			workspace.revealLeaf(existing[0]);
+			this.sidebar = existing[0];
+			return;
+		}
+		
+		// Créer dans la sidebar droite
+		const leaf = workspace.getRightLeaf(false);
+		if (leaf) {
+			await leaf.setViewState({
+				type: AI_RECORDING_VIEW_TYPE,
+				active: true,
+			});
+			workspace.revealLeaf(leaf);
+			this.sidebar = leaf;
 		}
 	}
 
