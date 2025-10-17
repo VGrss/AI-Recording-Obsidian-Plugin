@@ -884,39 +884,55 @@ export default class AIRecordingPlugin extends Plugin {
 
 	async saveTranscription(recording: RecordingMetadata, transcriptText: string, language?: string) {
 		try {
-			// Créer le nom de fichier pour la transcription
+			// NOUVEAU v0.9.7 : Créer directement le fichier combiné unique
 			const audioPath = recording.audioFile || '';
-			const transcriptPath = audioPath.replace('.webm', '.md');
+			const combinedPath = audioPath.replace('.webm', '.md');
 			
-			// Créer le contenu de la transcription
-			const content = `# Transcription - ${recording.title}
+			// Créer le contenu du fichier unique avec lien audio + résumé (placeholder) + transcription
+			const content = `# ${recording.title}
 
 **Date:** ${recording.date}
 **Durée:** ${this.formatDuration(recording.duration)}
 ${language ? `**Langue:** ${language}` : ''}
 
+## 🎵 Audio
+
+![[${audioPath}]]
+
 ---
 
+## 📝 Résumé
+
+_Le résumé sera ajouté automatiquement après génération..._
+
+---
+
+## 📄 Transcription Complète
+
 ${transcriptText}
+
+---
+
+*Note générée automatiquement par AI Recording Plugin*
 `;
 
-			// Sauvegarder le fichier de transcription
-			const existingFile = this.app.vault.getAbstractFileByPath(transcriptPath);
+			// Sauvegarder le fichier unique
+			const existingFile = this.app.vault.getAbstractFileByPath(combinedPath);
 			if (existingFile && existingFile instanceof TFile) {
 				await this.app.vault.modify(existingFile, content);
 			} else {
-				await this.app.vault.create(transcriptPath, content);
+				await this.app.vault.create(combinedPath, content);
 			}
 
 			// Mettre à jour les métadonnées
-			recording.transcriptFile = transcriptPath;
+			recording.transcriptFile = combinedPath; // Le fichier transcription est maintenant le fichier combiné
 			recording.updatedAt = Date.now();
 			await this.saveRecordingsIndex();
 
-			console.log('Transcription sauvegardée:', transcriptPath);
+			console.log('Fichier combiné créé:', combinedPath);
 
 		} catch (error) {
-			console.error('Erreur lors de la sauvegarde de la transcription:', error);
+			console.error('Erreur lors de la sauvegarde du fichier combiné:', error);
 			throw error;
 		}
 	}
@@ -961,7 +977,8 @@ ${transcriptText}
 	}
 
 	/**
-	 * NOUVEAU v0.9.6 : Renomme les fichiers de l'enregistrement avec le titre AI + date/heure
+	 * NOUVEAU v0.9.7 : Renomme les fichiers de l'enregistrement avec le titre AI + date/heure
+	 * 2 fichiers seulement : Audio - Titre.webm et Titre.md
 	 * @param recordingId ID de l'enregistrement
 	 * @param aiTitle Titre AI en 3 mots (sans la durée)
 	 */
@@ -984,8 +1001,8 @@ ${transcriptText}
 			
 			// Extraire la date et l'heure du nom du fichier audio
 			// Format: Recording_2025-10-16_14-30-00.webm
-			const audioFileName = audioPath.substring(audioPath.lastIndexOf('/') + 1);
-			const dateTimeMatch = audioFileName.match(/Recording_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})/);
+			const originalAudioFileName = audioPath.substring(audioPath.lastIndexOf('/') + 1);
+			const dateTimeMatch = originalAudioFileName.match(/Recording_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})/);
 			
 			let dateTimeStr = '';
 			if (dateTimeMatch) {
@@ -994,45 +1011,63 @@ ${transcriptText}
 				dateTimeStr = ` - ${date} ${time}`;
 			}
 
-			// Créer le nom de base: "Titre AI - YYYY-MM-DD HH-MM-SS"
-			const baseFileName = `${safeTitle}${dateTimeStr}`;
+			// Créer les nouveaux noms de fichiers
+			const newMdFileName = `${safeTitle}${dateTimeStr}.md`;
+			const newAudioFileName = `Audio - ${safeTitle}${dateTimeStr}.webm`;
 
-			// Renommer le fichier de transcription
+			// 1. Renommer le fichier .md (fichier combiné unique)
 			if (recording.transcriptFile) {
-				const newTranscriptPath = `${folderPath}/${baseFileName}.md`;
-				await this.renameFile(recording.transcriptFile, newTranscriptPath);
-				recording.transcriptFile = newTranscriptPath;
-				console.log(`Transcription renommée: ${newTranscriptPath}`);
+				const newMdPath = `${folderPath}/${newMdFileName}`;
+				await this.renameFile(recording.transcriptFile, newMdPath);
+				recording.transcriptFile = newMdPath;
+				recording.summaryFile = newMdPath; // Même fichier
+				console.log(`Fichier .md renommé: ${newMdPath}`);
 			}
 
-			// Renommer le fichier de résumé
-			if (recording.summaryFile) {
-				const newSummaryPath = `${folderPath}/${baseFileName}_summary.md`;
-				await this.renameFile(recording.summaryFile, newSummaryPath);
-				recording.summaryFile = newSummaryPath;
-				console.log(`Résumé renommé: ${newSummaryPath}`);
-			}
+			// 2. Renommer le fichier audio
+			const newAudioPath = `${folderPath}/${newAudioFileName}`;
+			await this.renameFile(audioPath, newAudioPath);
+			recording.audioFile = newAudioPath;
+			console.log(`Fichier audio renommé: ${newAudioPath}`);
 
-			// Renommer la note combinée si elle existe
-			const oldCombinedPath = audioPath.replace('.webm', '_combined.md');
-			const combinedFile = this.app.vault.getAbstractFileByPath(oldCombinedPath);
-			if (combinedFile) {
-				const newCombinedPath = `${folderPath}/${baseFileName}_combined.md`;
-				await this.renameFile(oldCombinedPath, newCombinedPath);
-				console.log(`Note combinée renommée: ${newCombinedPath}`);
-			}
+			// 3. Mettre à jour le lien audio dans le fichier .md
+			await this.updateAudioLinkInFile(recording.transcriptFile, audioPath, newAudioPath);
 
 			// Mettre à jour l'index et rafraîchir l'affichage
 			recording.updatedAt = Date.now();
 			await this.saveRecordingsIndex();
 			this.updateSidebar();
 
-			new Notice(`Fichiers renommés: ${baseFileName}`);
-			console.log(`Renommage terminé pour: ${baseFileName}`);
+			new Notice(`Fichiers renommés: ${safeTitle}`);
+			console.log(`Renommage terminé pour: ${safeTitle}${dateTimeStr}`);
 
 		} catch (error) {
 			console.error('Erreur lors du renommage des fichiers:', error);
 			new Notice(`Erreur lors du renommage des fichiers`);
+		}
+	}
+
+	/**
+	 * Met à jour le lien audio dans le fichier .md après renommage
+	 */
+	async updateAudioLinkInFile(mdFilePath: string, oldAudioPath: string, newAudioPath: string): Promise<void> {
+		try {
+			const file = this.app.vault.getAbstractFileByPath(mdFilePath);
+			if (!file || !(file instanceof TFile)) {
+				console.warn(`Fichier .md non trouvé: ${mdFilePath}`);
+				return;
+			}
+
+			let content = await this.app.vault.read(file);
+			
+			// Remplacer l'ancien lien par le nouveau
+			content = content.replace(`![[${oldAudioPath}]]`, `![[${newAudioPath}]]`);
+			
+			await this.app.vault.modify(file, content);
+			console.log('Lien audio mis à jour dans le fichier .md');
+
+		} catch (error) {
+			console.error('Erreur lors de la mise à jour du lien audio:', error);
 		}
 	}
 
@@ -1152,38 +1187,53 @@ ${transcriptText}
 
 	async saveSummary(recording: RecordingMetadata, summaryText: string) {
 		try {
-			// Créer le nom de fichier pour le résumé
-			const audioPath = recording.audioFile || '';
-			const summaryPath = audioPath.replace('.webm', '_summary.md');
+			// NOUVEAU v0.9.7 : Mettre à jour le fichier combiné existant avec le résumé
+			const combinedPath = recording.transcriptFile; // Le fichier combiné est déjà créé
 			
-			// Créer le contenu du résumé
-			const content = `# Résumé - ${recording.title}
-
-**Date:** ${recording.date}
-**Durée:** ${this.formatDuration(recording.duration)}
-
----
-
-${summaryText}
-`;
-
-			// Sauvegarder le fichier de résumé
-			const existingFile = this.app.vault.getAbstractFileByPath(summaryPath);
-			if (existingFile && existingFile instanceof TFile) {
-				await this.app.vault.modify(existingFile, content);
-			} else {
-				await this.app.vault.create(summaryPath, content);
+			if (!combinedPath) {
+				console.error('Fichier combiné introuvable');
+				return;
 			}
 
+			const file = this.app.vault.getAbstractFileByPath(combinedPath);
+			if (!file || !(file instanceof TFile)) {
+				console.error('Fichier combiné introuvable:', combinedPath);
+				return;
+			}
+
+			// Lire le contenu actuel
+			let content = await this.app.vault.read(file);
+
+			// Remplacer le placeholder du résumé par le vrai résumé
+			const summaryPlaceholder = '_Le résumé sera ajouté automatiquement après génération..._';
+			if (content.includes(summaryPlaceholder)) {
+				content = content.replace(summaryPlaceholder, summaryText);
+			} else {
+				// Si le placeholder n'existe pas, insérer le résumé après "## 📝 Résumé"
+				const summarySection = '## 📝 Résumé\n\n';
+				const summaryIndex = content.indexOf(summarySection);
+				if (summaryIndex !== -1) {
+					const endIndex = content.indexOf('\n\n---\n\n## 📄 Transcription', summaryIndex);
+					if (endIndex !== -1) {
+						content = content.substring(0, summaryIndex + summarySection.length) + 
+						         summaryText + 
+						         content.substring(endIndex);
+					}
+				}
+			}
+
+			// Sauvegarder le fichier mis à jour
+			await this.app.vault.modify(file, content);
+
 			// Mettre à jour les métadonnées
-			recording.summaryFile = summaryPath;
+			recording.summaryFile = combinedPath; // Même fichier que la transcription
 			recording.updatedAt = Date.now();
 			await this.saveRecordingsIndex();
 
-			console.log('Résumé sauvegardé:', summaryPath);
+			console.log('Résumé ajouté au fichier combiné:', combinedPath);
 
 		} catch (error) {
-			console.error('Erreur lors de la sauvegarde du résumé:', error);
+			console.error('Erreur lors de la mise à jour du résumé:', error);
 			throw error;
 		}
 	}

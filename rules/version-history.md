@@ -1,5 +1,49 @@
 # Historique des Versions
 
+## Version 0.9.7 - Simplification de l'Organisation des Fichiers
+**Date :** 16 Octobre 2025
+
+• **2 fichiers seulement** : Organisation ultra-simplifiée avec un fichier .md et un fichier audio
+• **Fichier .md unique** : `Titre IA - YYYY-MM-DD HH-MM-SS.md` contenant tout (lien audio + résumé + transcription)
+• **Fichier audio renommé** : `Audio - Titre IA - YYYY-MM-DD HH-MM-SS.webm` avec nom descriptif
+• **Plus d'onglets** : L'affichage des cartes montre directement le contenu du fichier
+• **Bouton "Ouvrir dans Obsidian"** : Pour consulter le fichier complet dans l'éditeur Obsidian
+• **Mise à jour automatique des liens** : Le lien audio dans le fichier .md est automatiquement mis à jour après renommage
+
+**Structure des fichiers avant (v0.9.6)** :
+```
+AI Recordings/2025-10-16/
+├── Recording_2025-10-16_14-30-00.webm (audio)
+├── Reunion Projet - 2025-10-16 14-30-00.md (transcription)
+├── Reunion Projet - 2025-10-16 14-30-00_summary.md (résumé)
+└── Reunion Projet - 2025-10-16 14-30-00_combined.md (note combinée)
+```
+
+**Structure des fichiers après (v0.9.7)** :
+```
+AI Recordings/2025-10-16/
+├── Audio - Reunion Projet - 2025-10-16 14-30-00.webm ✨
+└── Reunion Projet - 2025-10-16 14-30-00.md ✨ (fichier unique avec tout)
+```
+
+**Architecture** :
+- Refactorisation de `saveTranscription()` : Crée directement le fichier .md unique et complet
+- Refactorisation de `saveSummary()` : Met à jour le fichier .md existant au lieu de créer un fichier séparé
+- Refactorisation de `renameRecordingFiles()` : Renomme aussi le fichier audio + met à jour les liens
+- Nouvelle méthode `updateAudioLinkInFile()` : Met à jour le lien audio dans le fichier .md
+- Nouvelle méthode `loadCombinedFileContent()` : Charge et affiche le contenu du fichier unique
+- Nouvelle méthode `openFileInObsidian()` : Ouvre le fichier directement dans Obsidian
+- Suppression des onglets dans l'interface (plus besoin avec un seul fichier)
+- Suppression des méthodes obsolètes : `loadTranscriptContent()`, `loadSummaryContent()`, `openInNewNote()`
+
+**Bénéfices** :
+- 🎯 **Simplicité** : 4 fichiers → 2 fichiers (réduction de 50%)
+- 📁 **Organisation claire** : Plus de confusion entre transcription/résumé/note combinée
+- 🔍 **Recherche facilitée** : Un seul fichier à chercher pour tout le contenu
+- 📝 **Édition facile** : Tout le contenu est dans un seul fichier Obsidian
+- 🚀 **Performance** : Moins de fichiers à gérer et à renommer
+- ⚡ **Maintenance** : Code plus simple et moins de méthodes
+
 ## Version 0.9.6 - Renommage Automatique des Notes avec Titre AI
 **Date :** 16 Octobre 2025
 

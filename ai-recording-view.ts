@@ -317,47 +317,18 @@ export class AIRecordingView extends ItemView {
 			this.confirmDeleteRecording(recording);
 		};
 		
-		// Contenu collapsible
+		// Contenu collapsible (NOUVEAU v0.9.7 : affichage direct du fichier combiné)
 		const content = card.createDiv('ai-recording-card-content');
 		content.addClass('ai-recording-card-content-collapsed');
 		
-		// Onglets Summary/Transcript
-		const tabs = content.createDiv('ai-recording-card-tabs');
-		const tabButtons = tabs.createDiv('ai-recording-tab-buttons');
+		// Afficher le contenu du fichier combiné directement
+		const fileContent = content.createDiv('ai-recording-file-content');
 		
-		const summaryTab = tabButtons.createEl('button', { text: 'Summary' });
-		summaryTab.addClass('ai-recording-tab-btn', 'ai-recording-tab-active');
-		summaryTab.setAttribute('data-tab', 'summary');
-		summaryTab.onclick = () => this.switchTab(card, 'summary');
-		
-		const transcriptTab = tabButtons.createEl('button', { text: 'Transcript' });
-		transcriptTab.addClass('ai-recording-tab-btn');
-		transcriptTab.setAttribute('data-tab', 'transcript');
-		transcriptTab.onclick = () => this.switchTab(card, 'transcript');
-		
-		// Contenu des onglets
-		const tabContent = content.createDiv('ai-recording-tab-content');
-		
-		// Onglet Summary
-		const summaryContent = tabContent.createDiv('ai-recording-summary-content');
-		summaryContent.addClass('ai-recording-tab-panel', 'ai-recording-tab-panel-active');
-		
-		// Charger le résumé depuis le fichier si disponible
-		if (recording.summaryFile) {
-			this.loadSummaryContent(recording.summaryFile, summaryContent);
-		} else {
-			summaryContent.textContent = 'Aucun résumé disponible';
-		}
-		
-		// Onglet Transcript
-		const transcriptContent = tabContent.createDiv('ai-recording-transcript-content');
-		transcriptContent.addClass('ai-recording-tab-panel');
-		
-		// Charger la transcription depuis le fichier si disponible
+		// Charger le fichier combiné si disponible
 		if (recording.transcriptFile) {
-			this.loadTranscriptContent(recording.transcriptFile, transcriptContent);
+			this.loadCombinedFileContent(recording.transcriptFile, fileContent);
 		} else {
-			transcriptContent.textContent = 'Aucune transcription disponible';
+			fileContent.textContent = 'Aucun contenu disponible';
 		}
 		
 		// Actions dans le contenu
@@ -365,11 +336,11 @@ export class AIRecordingView extends ItemView {
 		
 		const copyButton = contentActions.createEl('button', { text: '📋 Copier' });
 		copyButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
-		copyButton.onclick = () => this.copyContent(card);
+		copyButton.onclick = () => this.copyContent(fileContent);
 		
-		const expandButton = contentActions.createEl('button', { text: '📄 Ouvrir' });
-		expandButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
-		expandButton.onclick = () => this.openInNewNote(recording);
+		const openButton = contentActions.createEl('button', { text: '📄 Ouvrir dans Obsidian' });
+		openButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
+		openButton.onclick = () => this.openFileInObsidian(recording.transcriptFile);
 
 		// Bouton de retranscription si pas de transcription
 		if (!recording.transcriptFile) {
@@ -413,22 +384,6 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	switchTab(card: HTMLElement, tabName: string) {
-		// Désactiver tous les onglets
-		const tabButtons = card.querySelectorAll('.ai-recording-tab-btn');
-		const tabPanels = card.querySelectorAll('.ai-recording-tab-panel');
-		
-		tabButtons.forEach(btn => btn.classList.remove('ai-recording-tab-active'));
-		tabPanels.forEach(panel => panel.classList.remove('ai-recording-tab-panel-active'));
-		
-		// Activer l'onglet sélectionné
-		const activeTab = card.querySelector(`.ai-recording-tab-btn[data-tab="${tabName}"]`) as HTMLElement;
-		const activePanel = card.querySelector(`.ai-recording-${tabName}-content`) as HTMLElement;
-		
-		if (activeTab) activeTab.classList.add('ai-recording-tab-active');
-		if (activePanel) activePanel.classList.add('ai-recording-tab-panel-active');
-	}
-
 	playRecording(recording: any) {
 		// Pour l'instant, juste un message
 		// TODO: Implémenter la lecture audio réelle
@@ -436,10 +391,9 @@ export class AIRecordingView extends ItemView {
 		console.log('Lecture de l\'enregistrement:', recording);
 	}
 
-	copyContent(card: HTMLElement) {
-		const activePanel = card.querySelector('.ai-recording-tab-panel-active') as HTMLElement;
-		if (activePanel) {
-			const text = activePanel.textContent || '';
+	copyContent(element: HTMLElement) {
+		if (element) {
+			const text = element.textContent || '';
 			navigator.clipboard.writeText(text).then(() => {
 				new Notice('Contenu copié dans le presse-papiers');
 			}).catch(err => {
@@ -449,139 +403,44 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	async loadTranscriptContent(transcriptPath: string, containerEl: HTMLElement) {
+	/**
+	 * NOUVEAU v0.9.7 : Charge le contenu du fichier combiné unique
+	 */
+	async loadCombinedFileContent(filePath: string, containerEl: HTMLElement) {
 		try {
 			const { vault } = this.plugin.app;
-			const file = vault.getAbstractFileByPath(transcriptPath);
+			const file = vault.getAbstractFileByPath(filePath);
 			
 			if (file && 'extension' in file) {
 				const content = await vault.read(file as any);
-				// Extraire seulement le texte de la transcription (sans les métadonnées)
-				const lines = content.split('\n');
-				const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
-				const transcriptText = separatorIndex !== -1 
-					? lines.slice(separatorIndex + 1).join('\n').trim()
-					: content;
-				containerEl.textContent = transcriptText || 'Transcription vide';
+				// Afficher le contenu complet du fichier
+				containerEl.textContent = content || 'Fichier vide';
 			} else {
-				containerEl.textContent = 'Fichier de transcription introuvable';
+				containerEl.textContent = 'Fichier introuvable';
 			}
 		} catch (error) {
-			console.error('Erreur lors du chargement de la transcription:', error);
-			containerEl.textContent = 'Erreur lors du chargement de la transcription';
+			console.error('Erreur lors du chargement du fichier:', error);
+			containerEl.textContent = 'Erreur lors du chargement du fichier';
 		}
 	}
 
-	async loadSummaryContent(summaryPath: string, containerEl: HTMLElement) {
+	/**
+	 * Ouvre le fichier dans Obsidian
+	 */
+	async openFileInObsidian(filePath: string | undefined) {
+		if (!filePath) {
+			new Notice('Aucun fichier à ouvrir');
+			return;
+		}
+
 		try {
-			const { vault } = this.plugin.app;
-			const file = vault.getAbstractFileByPath(summaryPath);
-			
-			if (file && 'extension' in file) {
-				const content = await vault.read(file as any);
-				// Extraire seulement le texte du résumé (sans les métadonnées)
-				const lines = content.split('\n');
-				const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
-				const summaryText = separatorIndex !== -1 
-					? lines.slice(separatorIndex + 1).join('\n').trim()
-					: content;
-				containerEl.textContent = summaryText || 'Résumé vide';
-			} else {
-				containerEl.textContent = 'Fichier de résumé introuvable';
-			}
+			await this.plugin.app.workspace.openLinkText(filePath, '', true);
+			new Notice('Fichier ouvert dans Obsidian');
 		} catch (error) {
-			console.error('Erreur lors du chargement du résumé:', error);
-			containerEl.textContent = 'Erreur lors du chargement du résumé';
+			console.error('Erreur lors de l\'ouverture du fichier:', error);
+			new Notice('Erreur lors de l\'ouverture du fichier');
 		}
 	}
-
-	async openInNewNote(recording: any) {
-		try {
-			// Charger le contenu de la transcription depuis le fichier
-			let transcriptText = 'Aucune transcription disponible';
-			if (recording.transcriptFile) {
-				const transcriptFile = this.plugin.app.vault.getAbstractFileByPath(recording.transcriptFile);
-				if (transcriptFile && 'extension' in transcriptFile) {
-					const content = await this.plugin.app.vault.read(transcriptFile as any);
-					const lines = content.split('\n');
-					const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
-					transcriptText = separatorIndex !== -1 
-						? lines.slice(separatorIndex + 1).join('\n').trim()
-						: content;
-				}
-			}
-
-			// Charger le contenu du résumé depuis le fichier
-			let summaryText = 'Aucun résumé disponible';
-			if (recording.summaryFile) {
-				const summaryFile = this.plugin.app.vault.getAbstractFileByPath(recording.summaryFile);
-				if (summaryFile && 'extension' in summaryFile) {
-					const content = await this.plugin.app.vault.read(summaryFile as any);
-					const lines = content.split('\n');
-					const separatorIndex = lines.findIndex((line: string) => line.trim() === '---');
-					summaryText = separatorIndex !== -1 
-						? lines.slice(separatorIndex + 1).join('\n').trim()
-						: content;
-				}
-			}
-
-			// Créer le contenu de la note combinée
-			const content = `# ${recording.title}
-
-**Date:** ${recording.date}
-**Durée:** ${this.formatDuration(recording.duration)}
-
-## 🎵 Audio
-
-![[${recording.audioFile}]]
-
----
-
-## 📝 Résumé
-
-${summaryText}
-
----
-
-## 📄 Transcription Complète
-
-${transcriptText}
-
----
-
-*Note générée automatiquement par AI Recording Plugin*
-`;
-
-			// Créer la note dans le même dossier que l'audio
-			// Extraire le dossier depuis le chemin du fichier audio
-			const audioPath = recording.audioFile || '';
-			const folderPath = audioPath.substring(0, audioPath.lastIndexOf('/'));
-			const baseFileName = audioPath.substring(audioPath.lastIndexOf('/') + 1).replace('.webm', '');
-			const noteName = `${folderPath}/${baseFileName}_combined.md`;
-			
-			const existingFile = this.plugin.app.vault.getAbstractFileByPath(noteName);
-			
-			if (existingFile) {
-				// Si la note existe déjà, demander confirmation
-				const confirmOverwrite = confirm(`La note "${baseFileName}_combined.md" existe déjà. Voulez-vous la remplacer ?`);
-				if (!confirmOverwrite) {
-					return;
-				}
-				await this.plugin.app.vault.modify(existingFile as any, content);
-			} else {
-				await this.plugin.app.vault.create(noteName, content);
-			}
-
-			// Ouvrir la note
-			await this.plugin.app.workspace.openLinkText(noteName, '', true);
-			new Notice('Note combinée créée avec succès !');
-
-		} catch (error) {
-			console.error('Erreur lors de la création de la note:', error);
-			new Notice('Erreur lors de la création de la note combinée');
-		}
-	}
-
 
 	confirmDeleteRecording(recording: any) {
 		const modal = document.createElement('div');
