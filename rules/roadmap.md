@@ -101,3 +101,10 @@ recordings
 **Objectif** : Améliorer l'expérience utilisateur en ouvrant automatiquement la sidebar au clic sur l'icône microphone
 **Description** : Implémenter l'ouverture automatique de la sidebar droite lors du clic sur l'icône microphone dans la barre de navigation gauche (ribbon). Si la sidebar est déjà ouverte, le clic la révèle/active. Cette fonctionnalité permet un accès plus rapide et intuitif aux contrôles d'enregistrement.
 **Tests** : Le clic sur l'icône microphone ouvre la sidebar si elle est fermée, la sidebar s'active/se révèle si elle est déjà ouverte, le comportement est cohérent et fluide, aucune régression sur les autres fonctionnalités ribbon
+
+---
+
+## 📋 Release 0.9.5 - Découplage Contrôles et Traitement des Cartes
+**Objectif** : Permettre de relancer un nouvel enregistrement pendant que les enregistrements précédents sont encore en cours de traitement
+**Description** : Refactoriser l'architecture pour découpler complètement la zone de contrôle (boutons start/stop/pause) des cartes d'enregistrement dans l'historique. Actuellement, les contrôles sont bloqués pendant le traitement (transcription + résumé) d'un enregistrement terminé. Après cette release, arrêter un enregistrement libère immédiatement les contrôles, permettant de démarrer un nouvel enregistrement pendant que la carte précédente continue son traitement en arrière-plan. Implémenter une file de traitement asynchrone pour gérer plusieurs cartes en cours de traitement simultanément. Ajouter des indicateurs visuels sur chaque carte pour suivre leur état de traitement individuel (UPLOADING, TRANSCRIBING, SUMMARIZING, COMPLETED).
+**Tests** : Après avoir arrêté un enregistrement, les contrôles sont immédiatement disponibles, un nouvel enregistrement peut démarrer pendant qu'une carte précédente est en cours de traitement, plusieurs cartes peuvent être en traitement simultanément, chaque carte affiche son propre état de traitement indépendamment, les traitements en arrière-plan se complètent correctement sans bloquer l'interface, aucune régression sur la qualité des transcriptions et résumés

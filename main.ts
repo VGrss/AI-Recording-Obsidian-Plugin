@@ -361,9 +361,15 @@ export default class AIRecordingPlugin extends Plugin {
 			new Notice('Enregistrement terminé et sauvegardé');
 			console.log('Enregistrement terminé:', this.currentRecording);
 			
-			// Démarrer la transcription si configuré
+			// NOUVEAU : Retourner immédiatement à IDLE pour libérer les contrôles
+			this.setRecordingState('IDLE');
+			
+			// Démarrer le traitement asynchrone (transcription + résumé) en arrière-plan
 			if (recordingId && this.settings.transcriptionProvider === 'openai') {
-				await this.transcribeRecording(recordingId);
+				// Lancer le traitement de manière asynchrone sans bloquer
+				this.processRecording(recordingId).catch(error => {
+					console.error('Erreur lors du traitement de l\'enregistrement:', error);
+				});
 			}
 		}
 	}
@@ -678,6 +684,122 @@ export default class AIRecordingPlugin extends Plugin {
 		console.log('Nombre d\'enregistrements dans l\'index:', this.recordingsIndex.length);
 	}
 
+	/**
+	 * NOUVEAU : Traite un enregistrement de manière asynchrone (transcription + résumé)
+	 * Cette méthode ne bloque pas les contrôles et permet le traitement en parallèle
+	 */
+	async processRecording(recordingId: string) {
+		try {
+			// Trouver l'enregistrement dans l'index
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (!recording) {
+				console.error('Enregistrement non trouvé:', recordingId);
+				return;
+			}
+
+			// Vérifier la clé API
+			if (!this.settings.openaiApiKey || this.settings.openaiApiKey.trim() === '') {
+				new Notice('Clé API OpenAI manquante. Veuillez la configurer dans les paramètres.');
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
+				this.updateSidebar();
+				return;
+			}
+
+			// Marquer comme en cours de traitement
+			recording.status = 'processing';
+			await this.saveRecordingsIndex();
+			this.updateSidebar();
+
+			// Lire le fichier audio
+			if (!recording.audioFile) {
+				throw new Error('Fichier audio manquant');
+			}
+
+			const audioFile = this.app.vault.getAbstractFileByPath(recording.audioFile);
+			if (!audioFile || !(audioFile instanceof TFile)) {
+				throw new Error('Fichier audio introuvable');
+			}
+
+			const audioBuffer = await this.app.vault.readBinary(audioFile);
+			const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+
+			// Effectuer la transcription
+			console.log(`Démarrage de la transcription pour ${recording.title}`);
+			const result = await this.transcriptionService.transcribeAudio(
+				audioBlob,
+				{
+					apiKey: this.settings.openaiApiKey,
+					model: this.settings.transcriptionModel,
+					language: this.settings.transcriptionLanguage,
+					responseFormat: 'verbose_json'
+				},
+				(status) => {
+					console.log(`Transcription ${recordingId}:`, status);
+				}
+			);
+
+			// Sauvegarder la transcription
+			await this.saveTranscription(recording, result.text, result.language);
+			console.log(`Transcription terminée pour ${recording.title}`);
+
+			// Générer le résumé si configuré
+			if (this.settings.summaryProvider === 'openai') {
+				console.log(`Démarrage du résumé pour ${recording.title}`);
+				
+				// Préparer les variables pour le template
+				const variables = {
+					transcript: result.text,
+					language: result.language || 'détectée',
+					datetime: new Date().toLocaleString('fr-FR'),
+					duration: this.formatDuration(recording.duration),
+					title: recording.title,
+					date: recording.date
+				};
+
+				// Générer le résumé
+				const summaryResult = await this.summaryService.generateSummary(
+					this.settings.summaryTemplate,
+					variables,
+					{
+						apiKey: this.settings.openaiApiKey,
+						model: this.settings.summaryModel,
+						summaryLength: this.settings.summaryLength
+					},
+					(status) => {
+						console.log(`Résumé ${recordingId}:`, status);
+					}
+				);
+
+				// Sauvegarder le résumé
+				await this.saveSummary(recording, summaryResult.text);
+				console.log(`Résumé terminé pour ${recording.title}`);
+
+				// Générer le titre AI en 3 mots
+				await this.generateAITitle(recordingId, result.text);
+			}
+
+			// Marquer comme terminé
+			recording.status = 'completed';
+			await this.saveRecordingsIndex();
+			this.updateSidebar();
+			
+			new Notice(`Traitement terminé pour ${recording.title}`);
+
+		} catch (error) {
+			console.error('Erreur lors du traitement de l\'enregistrement:', error);
+			new Notice(`Erreur de traitement: ${error.message}`);
+			
+			// Mettre à jour le statut d'erreur
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (recording) {
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
+				this.updateSidebar();
+			}
+		}
+	}
+
 	async transcribeRecording(recordingId: string) {
 		try {
 			// Trouver l'enregistrement dans l'index
@@ -699,7 +821,7 @@ export default class AIRecordingPlugin extends Plugin {
 			// Mettre à jour le statut
 			recording.status = 'processing';
 			await this.saveRecordingsIndex();
-			this.setRecordingState('UPLOADING');
+			this.updateSidebar();
 
 			// Lire le fichier audio
 			if (!recording.audioFile) {
@@ -714,9 +836,6 @@ export default class AIRecordingPlugin extends Plugin {
 			const audioBuffer = await this.app.vault.readBinary(audioFile);
 			const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
 
-			// Passer à l'état TRANSCRIBING
-			this.setRecordingState('TRANSCRIBING');
-
 			// Effectuer la transcription
 			const result = await this.transcriptionService.transcribeAudio(
 				audioBlob,
@@ -728,9 +847,6 @@ export default class AIRecordingPlugin extends Plugin {
 				},
 				(status) => {
 					console.log('Transcription status:', status);
-					if (this.recordingView) {
-						this.recordingView.updateTranscriptionStatus(status);
-					}
 				}
 			);
 
@@ -748,8 +864,6 @@ export default class AIRecordingPlugin extends Plugin {
 			if (this.settings.summaryProvider === 'openai') {
 				await this.generateSummary(recordingId, result.text);
 			} else {
-				// Retour à l'état IDLE si pas de résumé
-				this.setRecordingState('IDLE');
 				this.updateSidebar();
 			}
 
@@ -764,8 +878,6 @@ export default class AIRecordingPlugin extends Plugin {
 				await this.saveRecordingsIndex();
 			}
 
-			// Retour à l'état IDLE
-			this.setRecordingState('IDLE');
 			this.updateSidebar();
 		}
 	}
@@ -856,13 +968,16 @@ ${transcriptText}
 			// Vérifier la clé API
 			if (!this.settings.openaiApiKey || this.settings.openaiApiKey.trim() === '') {
 				new Notice('Clé API OpenAI manquante pour le résumé.');
-				this.setRecordingState('IDLE');
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
 				this.updateSidebar();
 				return;
 			}
 
-			// Passer à l'état SUMMARIZING
-			this.setRecordingState('SUMMARIZING');
+			// Marquer comme en cours de traitement
+			recording.status = 'processing';
+			await this.saveRecordingsIndex();
+			this.updateSidebar();
 
 			// Préparer les variables pour le template
 			const variables = {
@@ -885,9 +1000,6 @@ ${transcriptText}
 				},
 				(status) => {
 					console.log('Summary status:', status);
-					if (this.recordingView) {
-						this.recordingView.updateTranscriptionStatus(status);
-					}
 				}
 			);
 
@@ -900,16 +1012,21 @@ ${transcriptText}
 			// Générer le titre AI en 3 mots
 			await this.generateAITitle(recordingId, transcriptText);
 
-			// Retour à l'état IDLE
-			this.setRecordingState('IDLE');
+			// Marquer comme terminé
+			recording.status = 'completed';
+			await this.saveRecordingsIndex();
 			this.updateSidebar();
 
 		} catch (error) {
 			console.error('Erreur lors de la génération du résumé:', error);
 			new Notice(`Erreur de génération du résumé: ${error.message}`);
 			
-			// Retour à l'état IDLE
-			this.setRecordingState('IDLE');
+			// Mettre à jour le statut d'erreur
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (recording) {
+				recording.status = 'error';
+				await this.saveRecordingsIndex();
+			}
 			this.updateSidebar();
 		}
 	}

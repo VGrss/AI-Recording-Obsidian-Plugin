@@ -1,5 +1,56 @@
 # Historique des Versions
 
+## Version 0.9.5 - Découplage Contrôles et Traitement des Cartes
+**Date :** 16 Octobre 2025
+
+• **Libération immédiate des contrôles** : Les contrôles retournent à IDLE dès qu'un enregistrement est terminé
+• **Traitement asynchrone en arrière-plan** : La transcription et le résumé s'effectuent sans bloquer l'interface
+• **File de traitement décentralisée** : Chaque enregistrement gère son propre traitement indépendamment
+• **Traitements simultanés** : Possibilité de créer plusieurs enregistrements pendant que d'autres sont en cours de traitement
+• **Statuts visuels par carte** : Chaque carte affiche son propre statut de traitement (⏳ En cours, ✓ Terminé, ❌ Erreur)
+• **Animation de pulsation** : Le badge "En traitement" a une animation visuelle pour indiquer l'activité
+• **Suppression des états bloquants** : Les états UPLOADING, TRANSCRIBING, SUMMARIZING ne bloquent plus les contrôles
+• **Amélioration UX majeure** : Pas besoin d'attendre la fin du traitement pour démarrer un nouvel enregistrement
+
+**Comportement avant (v0.9.4 et antérieures)** :
+- 🚫 Les contrôles restaient bloqués pendant toute la durée du traitement
+- 🚫 Impossible de créer un nouvel enregistrement pendant la transcription/résumé
+- 🚫 Le statut de traitement était affiché dans la zone de contrôle
+- 🚫 Un seul enregistrement pouvait être traité à la fois
+
+**Comportement après (v0.9.5)** :
+- ✅ Les contrôles se libèrent immédiatement après avoir terminé un enregistrement
+- ✅ Possibilité de lancer plusieurs enregistrements consécutifs sans attendre
+- ✅ Chaque carte affiche son propre statut de traitement
+- ✅ Plusieurs enregistrements peuvent être traités en parallèle
+- ✅ Les erreurs d'un enregistrement n'impactent pas les autres
+
+**Architecture** :
+- Nouvelle méthode `processRecording()` : Gère le traitement asynchrone complet (transcription + résumé)
+- Refactorisation de `finishRecording()` : Retourne immédiatement à IDLE et lance le traitement en arrière-plan
+- Refactorisation de `transcribeRecording()` : Utilise le statut de la carte au lieu de l'état global
+- Refactorisation de `generateSummary()` : Utilise le statut de la carte au lieu de l'état global
+- Suppression de `createProcessingButtons()` et `updateTranscriptionStatus()` : Plus nécessaires
+- Amélioration de l'affichage des badges de statut avec 4 états visuels différents
+- Animation CSS de pulsation pour le statut "En traitement"
+
+**Nouveaux états visuels des cartes** :
+- ⏸️ En attente (gris) : L'enregistrement n'a pas encore été traité
+- ⏳ Traitement en cours... (orange, animé) : Transcription/résumé en cours
+- ✓ Terminé (vert) : Traitement terminé avec succès
+- ❌ Erreur (rouge) : Erreur durant le traitement
+
+**Impact technique** :
+- Chaque `processRecording()` s'exécute dans sa propre Promise
+- File de traitement implicite via promises asynchrones
+- Pas de limite sur le nombre de traitements simultanés (peut être ajouté plus tard si nécessaire)
+- Meilleure gestion des erreurs avec isolation par enregistrement
+
+**Documentation** :
+- Nouveau fichier `TEST_DECOUPLING.md` avec guide de test complet
+- 6 tests détaillés pour valider le découplage
+- Documentation du changement d'architecture
+
 ## Version 0.9.4 - Ouverture Automatique de la Sidebar
 **Date :** 14 Octobre 2025
 

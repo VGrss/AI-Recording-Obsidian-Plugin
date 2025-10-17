@@ -13,7 +13,6 @@ export class AIRecordingView extends ItemView {
 	buttonContainer: HTMLElement;
 	historyList: HTMLElement;
 	timerInterval: NodeJS.Timeout | null = null;
-	transcriptionStatusEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: any) {
 		super(leaf);
@@ -65,10 +64,6 @@ export class AIRecordingView extends ItemView {
 		this.timerDisplay = this.controlZone.createDiv('ai-recording-timer');
 		this.timerDisplay.textContent = '00:00';
 
-		// Statut de transcription
-		this.transcriptionStatusEl = this.controlZone.createDiv('ai-recording-transcription-status');
-		this.transcriptionStatusEl.style.display = 'none';
-
 		// Boutons de contrôle
 		this.buttonContainer = this.controlZone.createDiv('ai-recording-buttons');
 		this.updateButtons();
@@ -103,11 +98,8 @@ export class AIRecordingView extends ItemView {
 			case 'FINISHED':
 				this.createFinishedButtons();
 				break;
-			case 'UPLOADING':
-			case 'TRANSCRIBING':
-			case 'SUMMARIZING':
-				this.createProcessingButtons();
-				break;
+			// NOUVEAU : Les états de traitement ne bloquent plus les contrôles
+			// Les cartes affichent leur propre statut de traitement
 		}
 	}
 
@@ -162,16 +154,6 @@ export class AIRecordingView extends ItemView {
 		const newButton = this.buttonContainer.createEl('button', { text: 'Nouvel Enregistrement' });
 		newButton.addClass('ai-recording-btn', 'ai-recording-btn-primary');
 		newButton.onclick = () => this.plugin.setRecordingState('IDLE');
-	}
-
-	createProcessingButtons() {
-		const processingText = this.buttonContainer.createEl('div', { 
-			text: 'Traitement en cours...' 
-		});
-		processingText.addClass('ai-recording-processing-text');
-		processingText.style.fontStyle = 'italic';
-		processingText.style.color = 'var(--text-muted)';
-		processingText.style.padding = '8px';
 	}
 
 	confirmFinishRecording() {
@@ -234,25 +216,6 @@ export class AIRecordingView extends ItemView {
 		this.updateButtons();
 		this.updateTimer();
 		this.updateHistoryList();
-		this.updateTranscriptionStatusVisibility();
-	}
-
-	updateTranscriptionStatus(status: string) {
-		if (this.transcriptionStatusEl) {
-			this.transcriptionStatusEl.textContent = status;
-			this.transcriptionStatusEl.style.display = 'block';
-		}
-	}
-
-	updateTranscriptionStatusVisibility() {
-		if (!this.transcriptionStatusEl) return;
-		
-		const state = this.plugin.getRecordingState();
-		if (state === 'UPLOADING' || state === 'TRANSCRIBING' || state === 'SUMMARIZING') {
-			this.transcriptionStatusEl.style.display = 'block';
-		} else {
-			this.transcriptionStatusEl.style.display = 'none';
-		}
 	}
 
 	updateHistoryList() {
@@ -315,11 +278,22 @@ export class AIRecordingView extends ItemView {
 		const durationText = meta.createEl('span', { text: this.formatDuration(recording.duration) });
 		durationText.addClass('ai-recording-meta-text');
 		
-		// Statut de processing si applicable (dans la carte)
+		// Statut de traitement si applicable (dans la carte)
+		const statusBadge = headerMain.createDiv('ai-recording-status-badge');
+		statusBadge.setAttribute('data-recording-id', recording.id);
+		
 		if (recording.status === 'processing') {
-			const statusBadge = headerMain.createDiv('ai-recording-status-badge');
 			statusBadge.addClass('ai-recording-status-processing-badge');
-			statusBadge.textContent = '⏳ En traitement...';
+			statusBadge.textContent = '⏳ Traitement en cours...';
+		} else if (recording.status === 'error') {
+			statusBadge.addClass('ai-recording-status-error-badge');
+			statusBadge.textContent = '❌ Erreur';
+		} else if (recording.status === 'completed') {
+			statusBadge.addClass('ai-recording-status-completed-badge');
+			statusBadge.textContent = '✓ Terminé';
+		} else if (recording.status === 'pending') {
+			statusBadge.addClass('ai-recording-status-pending-badge');
+			statusBadge.textContent = '⏸️ En attente';
 		}
 		
 		// Actions dans le header
@@ -900,17 +874,41 @@ ${transcriptText}
 				color: var(--text-faint);
 			}
 
-			.ai-recording-status-processing-badge {
+			.ai-recording-status-badge {
 				margin-left: 18px;
 				margin-top: 4px;
 				padding: 4px 10px;
 				border-radius: 12px;
 				font-size: 11px;
 				font-weight: 500;
-				background: #ff9800;
-				color: white;
 				display: inline-block;
 				width: fit-content;
+			}
+
+			.ai-recording-status-processing-badge {
+				background: #ff9800;
+				color: white;
+				animation: pulse 2s ease-in-out infinite;
+			}
+
+			.ai-recording-status-error-badge {
+				background: #f44336;
+				color: white;
+			}
+
+			.ai-recording-status-completed-badge {
+				background: #4caf50;
+				color: white;
+			}
+
+			.ai-recording-status-pending-badge {
+				background: #9e9e9e;
+				color: white;
+			}
+
+			@keyframes pulse {
+				0%, 100% { opacity: 1; }
+				50% { opacity: 0.6; }
 			}
 
 			.ai-recording-status {
