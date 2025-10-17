@@ -1,6 +1,6 @@
 {
 	"name": "ai-recording-obsidian-plugin",
-	"version": "0.9.5",
+	"version": "0.9.6",
 	"description": "Un plugin Obsidian pour l'enregistrement audio avec traitement IA",
 	"main": "main.js",
 	"scripts": {

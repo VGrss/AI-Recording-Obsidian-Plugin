@@ -1,5 +1,53 @@
 # Historique des Versions
 
+## Version 0.9.6 - Renommage Automatique des Notes avec Titre AI
+**Date :** 16 Octobre 2025
+
+• **Renommage automatique des fichiers** : Les fichiers .md sont automatiquement renommés avec le titre AI généré + date/heure
+• **Organisation améliorée** : Fini les noms peu lisibles (Recording_2025-10-16_14-30-00.md), place aux noms descriptifs (Reunion Projet - 2025-10-16 14-30-00.md)
+• **Renommage complet** : Transcription, résumé et note combinée sont renommés avec le titre AI comme base
+• **Fichier audio préservé** : Le fichier audio garde son nom technique pour éviter les problèmes de liens
+• **Index mis à jour** : Tous les chemins sont automatiquement mis à jour dans l'index
+• **Notification utilisateur** : Message de confirmation après le renommage réussi
+
+**Structure des fichiers avant (v0.9.5)** :
+```
+AI Recordings/2025-10-16/
+├── Recording_2025-10-16_14-30-00.webm (audio)
+├── Recording_2025-10-16_14-30-00.md (transcription)
+├── Recording_2025-10-16_14-30-00_summary.md (résumé)
+└── Recording_2025-10-16_14-30-00_combined.md (note combinée)
+```
+
+**Structure des fichiers après (v0.9.6)** :
+```
+AI Recordings/2025-10-16/
+├── Recording_2025-10-16_14-30-00.webm (audio - nom préservé)
+├── Reunion Projet - 2025-10-16 14-30-00.md (transcription renommée)
+├── Reunion Projet - 2025-10-16 14-30-00_summary.md (résumé renommé)
+└── Reunion Projet - 2025-10-16 14-30-00_combined.md (note combinée renommée)
+```
+
+**Architecture** :
+- Nouvelle méthode `renameRecordingFiles(recordingId, aiTitle)` : Gère le renommage de tous les fichiers
+- Nouvelle méthode `sanitizeFilename(filename)` : Nettoie le titre pour utilisation comme nom de fichier
+- Nouvelle méthode `renameFile(oldPath, newPath)` : Renomme un fichier via l'API Obsidian
+- Intégration dans `generateAITitle()` : Le renommage se fait automatiquement après génération du titre
+- Mise à jour automatique de `RecordingMetadata` avec les nouveaux chemins
+- Utilisation de `app.fileManager.renameFile()` pour un renommage sûr avec gestion des liens
+
+**Sécurité** :
+- Suppression des caractères invalides dans les noms de fichiers (<>:"/\\|?*)
+- Vérification de l'existence des fichiers avant renommage
+- Éviter les doublons (ne renomme pas si le nouveau nom existe déjà)
+- Gestion d'erreurs complète avec logs détaillés
+
+**Bénéfices** :
+- Meilleure lisibilité dans l'explorateur de fichiers Obsidian
+- Navigation plus intuitive avec des noms descriptifs
+- Organisation professionnelle du vault
+- Recherche facilitée par des noms significatifs
+
 ## Version 0.9.5 - Découplage Contrôles et Traitement des Cartes
 **Date :** 16 Octobre 2025
 

@@ -950,9 +950,128 @@ ${transcriptText}
 			this.updateSidebar();
 			
 			console.log('Titre AI généré:', recording.title);
+
+			// NOUVEAU v0.9.6 : Renommer automatiquement les fichiers avec le titre AI
+			await this.renameRecordingFiles(recordingId, aiTitle);
+			
 		} catch (error) {
 			console.error('Erreur lors de la génération du titre AI:', error);
 			// On continue sans bloquer en cas d'erreur
+		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.6 : Renomme les fichiers de l'enregistrement avec le titre AI + date/heure
+	 * @param recordingId ID de l'enregistrement
+	 * @param aiTitle Titre AI en 3 mots (sans la durée)
+	 */
+	async renameRecordingFiles(recordingId: string, aiTitle: string) {
+		try {
+			const recording = this.recordingsIndex.find(r => r.id === recordingId);
+			if (!recording) {
+				console.error('Enregistrement non trouvé pour renommage:', recordingId);
+				return;
+			}
+
+			console.log(`Renommage des fichiers pour: ${aiTitle}`);
+
+			// Nettoyer le titre AI pour utilisation en nom de fichier
+			const safeTitle = this.sanitizeFilename(aiTitle);
+			
+			// Extraire le dossier et la date/heure du fichier audio
+			const audioPath = recording.audioFile || '';
+			const folderPath = audioPath.substring(0, audioPath.lastIndexOf('/'));
+			
+			// Extraire la date et l'heure du nom du fichier audio
+			// Format: Recording_2025-10-16_14-30-00.webm
+			const audioFileName = audioPath.substring(audioPath.lastIndexOf('/') + 1);
+			const dateTimeMatch = audioFileName.match(/Recording_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})/);
+			
+			let dateTimeStr = '';
+			if (dateTimeMatch) {
+				const date = dateTimeMatch[1]; // YYYY-MM-DD
+				const time = dateTimeMatch[2]; // HH-MM-SS
+				dateTimeStr = ` - ${date} ${time}`;
+			}
+
+			// Créer le nom de base: "Titre AI - YYYY-MM-DD HH-MM-SS"
+			const baseFileName = `${safeTitle}${dateTimeStr}`;
+
+			// Renommer le fichier de transcription
+			if (recording.transcriptFile) {
+				const newTranscriptPath = `${folderPath}/${baseFileName}.md`;
+				await this.renameFile(recording.transcriptFile, newTranscriptPath);
+				recording.transcriptFile = newTranscriptPath;
+				console.log(`Transcription renommée: ${newTranscriptPath}`);
+			}
+
+			// Renommer le fichier de résumé
+			if (recording.summaryFile) {
+				const newSummaryPath = `${folderPath}/${baseFileName}_summary.md`;
+				await this.renameFile(recording.summaryFile, newSummaryPath);
+				recording.summaryFile = newSummaryPath;
+				console.log(`Résumé renommé: ${newSummaryPath}`);
+			}
+
+			// Renommer la note combinée si elle existe
+			const oldCombinedPath = audioPath.replace('.webm', '_combined.md');
+			const combinedFile = this.app.vault.getAbstractFileByPath(oldCombinedPath);
+			if (combinedFile) {
+				const newCombinedPath = `${folderPath}/${baseFileName}_combined.md`;
+				await this.renameFile(oldCombinedPath, newCombinedPath);
+				console.log(`Note combinée renommée: ${newCombinedPath}`);
+			}
+
+			// Mettre à jour l'index et rafraîchir l'affichage
+			recording.updatedAt = Date.now();
+			await this.saveRecordingsIndex();
+			this.updateSidebar();
+
+			new Notice(`Fichiers renommés: ${baseFileName}`);
+			console.log(`Renommage terminé pour: ${baseFileName}`);
+
+		} catch (error) {
+			console.error('Erreur lors du renommage des fichiers:', error);
+			new Notice(`Erreur lors du renommage des fichiers`);
+		}
+	}
+
+	/**
+	 * Nettoie un nom de fichier en supprimant les caractères invalides
+	 */
+	sanitizeFilename(filename: string): string {
+		// Remplacer les caractères invalides par des espaces ou les supprimer
+		return filename
+			.replace(/[<>:"/\\|?*]/g, '') // Supprimer les caractères invalides
+			.replace(/\s+/g, ' ') // Normaliser les espaces multiples
+			.trim();
+	}
+
+	/**
+	 * Renomme un fichier dans le vault Obsidian
+	 */
+	async renameFile(oldPath: string, newPath: string): Promise<void> {
+		try {
+			const file = this.app.vault.getAbstractFileByPath(oldPath);
+			if (!file || !(file instanceof TFile)) {
+				console.warn(`Fichier non trouvé pour renommage: ${oldPath}`);
+				return;
+			}
+
+			// Vérifier si un fichier avec le nouveau nom existe déjà
+			const existingFile = this.app.vault.getAbstractFileByPath(newPath);
+			if (existingFile) {
+				console.warn(`Un fichier existe déjà à: ${newPath}`);
+				return;
+			}
+
+			// Renommer le fichier
+			await this.app.fileManager.renameFile(file, newPath);
+			console.log(`Fichier renommé: ${oldPath} → ${newPath}`);
+
+		} catch (error) {
+			console.error(`Erreur lors du renommage ${oldPath} → ${newPath}:`, error);
+			throw error;
 		}
 	}
 
