@@ -11,7 +11,7 @@ export interface RecordingMetadata {
 	title: string;
 	date: string;
 	duration: number;
-	status: 'pending' | 'processing' | 'completed' | 'error';
+	status: 'pending' | 'processing' | 'completed' | 'error' | string; // NOUVEAU v0.9.9 : Permet les statuts dynamiques comme 'processing_chunk_X_Y'
 	audioFile?: string;
 	audioChunks?: string[]; // NOUVEAU v0.9.8 : Chemins des chunks temporaires
 	transcriptFile?: string;
@@ -935,67 +935,76 @@ export default class AIRecordingPlugin extends Plugin {
 			await this.saveRecordingsIndex();
 			this.updateSidebar();
 
-			// NOUVEAU v0.9.8 : Vérifier si des chunks existent pour les fichiers volumineux
+			// NOUVEAU v0.9.9 : Vérifier si des chunks existent pour les fichiers volumineux
+			let transcriptText = '';
+			let transcriptLanguage: string | undefined = undefined;
+			
 			if (recording.audioChunks && recording.audioChunks.length > 0) {
+				// Transcription multi-chunks
 				console.log(`Fichier volumineux détecté: ${recording.audioChunks.length} chunks disponibles`);
-				console.log('Note: La transcription multi-chunks sera implémentée dans v0.9.9');
-				console.log('Pour l\'instant, tentative de transcription du fichier original complet...');
-				// TODO v0.9.9: Transcribe chaque chunk et combiner les transcriptions
-			}
-
-			// Lire le fichier audio
-			if (!recording.audioFile) {
-				throw new Error('Fichier audio manquant');
-			}
-
-			const audioFile = this.app.vault.getAbstractFileByPath(recording.audioFile);
-			if (!audioFile || !(audioFile instanceof TFile)) {
-				throw new Error('Fichier audio introuvable');
-			}
-
-			const audioBuffer = await this.app.vault.readBinary(audioFile);
-			const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
-
-			// NOUVEAU v0.9.8 : Vérifier la taille du fichier
-			const maxSize = 25 * 1024 * 1024; // 25 MB
-			if (audioBlob.size > maxSize) {
-				if (recording.audioChunks && recording.audioChunks.length > 0) {
-					console.log(`Fichier volumineux (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB) mais chunks disponibles`);
-					console.log('La transcription multi-chunks sera implémentée dans v0.9.9');
-					// Pour v0.9.8, on essaie quand même de transcrire (l'API échouera proprement)
-					new Notice('Fichier volumineux: La transcription multi-chunks sera disponible dans la prochaine version');
-				} else {
-					throw new Error(`Fichier trop volumineux (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB). Maximum: 25 MB`);
+				console.log('Démarrage de la transcription multi-chunks...');
+				
+				// Transcribe chaque chunk et combiner les transcriptions
+				const combinedResult = await this.transcribeChunks(recording, recordingId);
+				
+				// Sauvegarder la transcription combinée
+				await this.saveTranscription(recording, combinedResult.text, combinedResult.language);
+				console.log(`Transcription multi-chunks terminée pour ${recording.title}`);
+				
+				transcriptText = combinedResult.text;
+				transcriptLanguage = combinedResult.language;
+			} else {
+				// Transcription normale pour fichiers < 25 MB
+				// Lire le fichier audio
+				if (!recording.audioFile) {
+					throw new Error('Fichier audio manquant');
 				}
-			}
 
-			// Effectuer la transcription
-			console.log(`Démarrage de la transcription pour ${recording.title}`);
-			const result = await this.transcriptionService.transcribeAudio(
-				audioBlob,
-				{
-					apiKey: this.settings.openaiApiKey,
-					model: this.settings.transcriptionModel,
-					language: this.settings.transcriptionLanguage,
-					responseFormat: 'verbose_json'
-				},
-				(status) => {
-					console.log(`Transcription ${recordingId}:`, status);
+				const audioFile = this.app.vault.getAbstractFileByPath(recording.audioFile);
+				if (!audioFile || !(audioFile instanceof TFile)) {
+					throw new Error('Fichier audio introuvable');
 				}
-			);
 
-			// Sauvegarder la transcription
-			await this.saveTranscription(recording, result.text, result.language);
-			console.log(`Transcription terminée pour ${recording.title}`);
+				const audioBuffer = await this.app.vault.readBinary(audioFile);
+				const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+
+				// Vérifier la taille du fichier
+				const maxSize = 25 * 1024 * 1024; // 25 MB
+				if (audioBlob.size > maxSize) {
+					throw new Error(`Fichier trop volumineux (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB). Maximum: 25 MB. Le découpage automatique devrait avoir créé des chunks.`);
+				}
+
+				// Effectuer la transcription
+				console.log(`Démarrage de la transcription pour ${recording.title}`);
+				const result = await this.transcriptionService.transcribeAudio(
+					audioBlob,
+					{
+						apiKey: this.settings.openaiApiKey,
+						model: this.settings.transcriptionModel,
+						language: this.settings.transcriptionLanguage,
+						responseFormat: 'verbose_json'
+					},
+					(status) => {
+						console.log(`Transcription ${recordingId}:`, status);
+					}
+				);
+
+				// Sauvegarder la transcription
+				await this.saveTranscription(recording, result.text, result.language);
+				console.log(`Transcription terminée pour ${recording.title}`);
+				
+				transcriptText = result.text;
+				transcriptLanguage = result.language;
+			}
 
 			// Générer le résumé si configuré
-			if (this.settings.summaryProvider === 'openai') {
+			if (this.settings.summaryProvider === 'openai' && transcriptText) {
 				console.log(`Démarrage du résumé pour ${recording.title}`);
 				
 				// Préparer les variables pour le template
 				const variables = {
-					transcript: result.text,
-					language: result.language || 'détectée',
+					transcript: transcriptText,
+					language: transcriptLanguage || 'détectée',
 					datetime: new Date().toLocaleString('fr-FR'),
 					duration: this.formatDuration(recording.duration),
 					title: recording.title,
@@ -1021,7 +1030,7 @@ export default class AIRecordingPlugin extends Plugin {
 				console.log(`Résumé terminé pour ${recording.title}`);
 
 				// Générer le titre AI en 3 mots
-				await this.generateAITitle(recordingId, result.text);
+				await this.generateAITitle(recordingId, transcriptText);
 			}
 
 			// Marquer comme terminé
@@ -1059,6 +1068,134 @@ export default class AIRecordingPlugin extends Plugin {
 				}
 			}
 		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.9 : Transcrit chaque chunk individuellement et combine les transcriptions
+	 * @param recording Métadonnées de l'enregistrement
+	 * @param recordingId ID de l'enregistrement
+	 * @returns Transcription combinée avec texte et langue
+	 */
+	async transcribeChunks(
+		recording: RecordingMetadata,
+		recordingId: string
+	): Promise<{ text: string; language: string | undefined }> {
+		if (!recording.audioChunks || recording.audioChunks.length === 0) {
+			throw new Error('Aucun chunk disponible pour transcription');
+		}
+
+		const totalChunks = recording.audioChunks.length;
+		const chunkTranscripts: Array<{ text: string; language?: string; chunkIndex: number }> = [];
+		
+		console.log(`Début de la transcription de ${totalChunks} chunks...`);
+
+		// Transcribe chaque chunk séquentiellement pour maintenir l'ordre chronologique
+		for (let i = 0; i < totalChunks; i++) {
+			const chunkPath = recording.audioChunks![i];
+			const chunkIndex = i + 1;
+			
+			try {
+				// Mettre à jour le statut avec la progression
+				recording.status = `processing_chunk_${chunkIndex}_${totalChunks}`;
+				await this.saveRecordingsIndex();
+				this.updateSidebar();
+				
+				console.log(`Transcription du chunk ${chunkIndex}/${totalChunks}...`);
+				
+				// Lire le chunk
+				const chunkFile = this.app.vault.getAbstractFileByPath(chunkPath);
+				if (!chunkFile || !(chunkFile instanceof TFile)) {
+					throw new Error(`Chunk introuvable: ${chunkPath}`);
+				}
+
+				const chunkBuffer = await this.app.vault.readBinary(chunkFile);
+				const chunkBlob = new Blob([chunkBuffer], { type: 'audio/webm' });
+
+				// Transcribe le chunk avec retry en cas d'erreur
+				let retryCount = 0;
+				const maxRetries = 3;
+				let chunkResult: { text: string; language?: string } | null = null;
+
+				while (retryCount <= maxRetries) {
+					try {
+						chunkResult = await this.transcriptionService.transcribeAudio(
+							chunkBlob,
+							{
+								apiKey: this.settings.openaiApiKey,
+								model: this.settings.transcriptionModel,
+								language: this.settings.transcriptionLanguage,
+								responseFormat: 'verbose_json'
+							},
+							(status) => {
+								console.log(`Chunk ${chunkIndex}/${totalChunks} - ${status}`);
+							}
+						);
+						break; // Succès, sortir de la boucle retry
+					} catch (error) {
+						retryCount++;
+						if (retryCount > maxRetries) {
+							throw error; // Échec après tous les retries
+						}
+						console.warn(`Erreur lors de la transcription du chunk ${chunkIndex}, retry ${retryCount}/${maxRetries}...`, error);
+						await new Promise(resolve => setTimeout(resolve, 2000 * retryCount)); // Backoff exponentiel
+					}
+				}
+
+				if (!chunkResult) {
+					throw new Error(`Échec de la transcription du chunk ${chunkIndex} après ${maxRetries} tentatives`);
+				}
+
+				chunkTranscripts.push({
+					text: chunkResult.text,
+					language: chunkResult.language,
+					chunkIndex: chunkIndex
+				});
+
+				console.log(`Chunk ${chunkIndex}/${totalChunks} transcrit avec succès (${chunkResult.text.length} caractères)`);
+
+			} catch (error) {
+				console.error(`Erreur lors de la transcription du chunk ${chunkIndex}/${totalChunks}:`, error);
+				throw new Error(`Échec de la transcription du chunk ${chunkIndex}/${totalChunks}: ${error.message}`);
+			}
+		}
+
+		// Combiner les transcriptions dans l'ordre chronologique
+		console.log('Combinaison des transcriptions...');
+		const combinedResult = this.combineTranscriptions(chunkTranscripts);
+		
+		console.log(`Transcription combinée terminée: ${combinedResult.text.length} caractères`);
+		
+		return {
+			text: combinedResult.text,
+			language: combinedResult.language
+		};
+	}
+
+	/**
+	 * NOUVEAU v0.9.9 : Combine les transcriptions de chunks dans l'ordre chronologique
+	 * @param chunkTranscripts Tableau des transcriptions de chunks avec leurs métadonnées
+	 * @returns Transcription combinée avec texte et langue
+	 */
+	combineTranscriptions(
+		chunkTranscripts: Array<{ text: string; language?: string; chunkIndex: number }>
+	): { text: string; language: string | undefined } {
+		// Trier par chunkIndex pour garantir l'ordre chronologique
+		chunkTranscripts.sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+		// Combiner les textes avec un espace entre chaque chunk
+		// Pour une meilleure fluidité, on supprime les espaces en début/fin de chaque chunk
+		const combinedText = chunkTranscripts
+			.map(chunk => chunk.text.trim())
+			.filter(text => text.length > 0) // Filtrer les chunks vides
+			.join(' ');
+
+		// Utiliser la langue du premier chunk (généralement cohérente pour tous)
+		const language = chunkTranscripts.length > 0 ? chunkTranscripts[0].language : undefined;
+
+		return {
+			text: combinedText,
+			language: language
+		};
 	}
 
 	/**

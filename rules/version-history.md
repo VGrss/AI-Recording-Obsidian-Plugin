@@ -1,5 +1,55 @@
 # Historique des Versions
 
+## Version 0.9.9 - Transcription Multi-Chunks et Combinaison
+**Date :** 16 Octobre 2025
+
+• **Transcription multi-chunks** : Chaque chunk est transcrit individuellement et séquentiellement
+• **Combinaison automatique** : Les transcriptions sont combinées dans l'ordre chronologique pour créer une transcription complète
+• **Progression visuelle** : Affichage de la progression (chunk X/Y) dans l'interface utilisateur
+• **Gestion des erreurs avec retry** : Chaque chunk bénéficie de 3 tentatives de transcription en cas d'erreur
+• **Ordre chronologique garanti** : Les chunks sont transcrits séquentiellement pour maintenir l'ordre temporel
+• **Transcription fluide** : Les transcriptions sont combinées avec des espaces pour une lecture fluide
+• **Nettoyage automatique** : Les chunks temporaires sont nettoyés après transcription réussie
+
+**Problème résolu** :
+- ❌ Avant (v0.9.8) : Les chunks étaient créés mais pas encore transcrits (TODO)
+- ✅ Après (v0.9.9) : Les chunks sont transcrits individuellement et combinés automatiquement
+
+**Architecture** :
+- Nouvelle méthode `transcribeChunks()` : Transcrit chaque chunk séquentiellement avec progression
+- Nouvelle méthode `combineTranscriptions()` : Combine les transcriptions dans l'ordre chronologique
+- Modification de `processRecording()` : Détecte les chunks et utilise `transcribeChunks()` au lieu de la transcription simple
+- Modification de `ai-recording-view.ts` : Affichage de la progression (chunk X/Y) dans le statut de la carte
+- Statut dynamique : Le statut `processing_chunk_X_Y` permet d'afficher la progression en temps réel
+- Retry automatique : Chaque chunk bénéficie de 3 tentatives avec backoff exponentiel en cas d'erreur
+
+**Fonctionnement** :
+1. Détection des chunks (v0.9.8) : Si des chunks existent, la transcription multi-chunks est lancée
+2. Transcription séquentielle : Chaque chunk est transcrit un par un pour maintenir l'ordre chronologique
+3. Progression en temps réel : Le statut est mis à jour pour chaque chunk (chunk X/Y)
+4. Retry automatique : En cas d'erreur, le chunk est retranscrit jusqu'à 3 fois
+5. Combinaison : Les transcriptions sont triées et combinées dans l'ordre chronologique
+6. Sauvegarde : La transcription combinée est sauvegardée comme une transcription normale
+7. Nettoyage : Les chunks temporaires sont nettoyés après transcription réussie
+
+**Bénéfices** :
+- ✅ Transcription complète des fichiers volumineux (> 25 MB)
+- ✅ Progression visuelle claire pour l'utilisateur
+- ✅ Robustesse avec retry automatique
+- ✅ Transcription fluide et cohérente malgré les coupures
+- ✅ Ordre chronologique garanti
+- ✅ Aucune perte de texte entre les chunks
+
+**Limitations connues** :
+- ⚠️ La transcription séquentielle peut prendre du temps pour les fichiers avec beaucoup de chunks
+- ⚠️ Les erreurs de transcription d'un chunk bloquent temporairement la progression (avec retry)
+- ⚠️ La combinaison des transcriptions est simple (espaces) et peut nécessiter des ajustements manuels
+
+**Améliorations futures (v0.9.10)** :
+- Interface utilisateur améliorée avec progression visuelle plus détaillée
+- Détection précoce de la taille du fichier pendant l'enregistrement
+- Compression audio optimisée pour réduire la taille sans perte de qualité
+
 ## Version 0.9.8 - Découpage Automatique des Fichiers Audio Volumineux
 **Date :** 16 Octobre 2025
 

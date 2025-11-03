@@ -282,7 +282,20 @@ export class AIRecordingView extends ItemView {
 		const statusBadge = headerMain.createDiv('ai-recording-status-badge');
 		statusBadge.setAttribute('data-recording-id', recording.id);
 		
-		if (recording.status === 'processing') {
+		// NOUVEAU v0.9.9 : Détecter le statut de progression des chunks
+		if (typeof recording.status === 'string' && recording.status.startsWith('processing_chunk_')) {
+			// Format: processing_chunk_X_Y
+			const match = recording.status.match(/processing_chunk_(\d+)_(\d+)/);
+			if (match) {
+				const currentChunk = parseInt(match[1]);
+				const totalChunks = parseInt(match[2]);
+				statusBadge.addClass('ai-recording-status-processing-badge');
+				statusBadge.textContent = `⏳ Transcription chunk ${currentChunk}/${totalChunks}...`;
+			} else {
+				statusBadge.addClass('ai-recording-status-processing-badge');
+				statusBadge.textContent = '⏳ Traitement en cours...';
+			}
+		} else if (recording.status === 'processing') {
 			statusBadge.addClass('ai-recording-status-processing-badge');
 			statusBadge.textContent = '⏳ Traitement en cours...';
 		} else if (recording.status === 'error') {
