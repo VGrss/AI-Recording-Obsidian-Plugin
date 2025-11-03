@@ -120,3 +120,24 @@ recordings
 **Objectif** : Simplifier l'organisation pour n'avoir que 2 fichiers par enregistrement : un fichier .md unique et un fichier audio renommé
 **Description** : Réduire la complexité en passant de 4 fichiers (audio, transcription, résumé, note combinée) à seulement 2 fichiers. Un seul fichier .md "Titre IA - date/heure.md" contient tout : lien vers l'audio, résumé et transcription complète. Le fichier audio est renommé "Audio - Titre IA - date/heure.webm". Supprimer les onglets dans l'interface puisqu'il n'y a plus qu'un seul contenu à afficher. Simplifier le code en supprimant les méthodes de création/chargement de fichiers séparés.
 **Tests** : Après un enregistrement, seulement 2 fichiers sont créés dans le dossier, le fichier .md contient le lecteur audio + résumé + transcription, le fichier audio a un nom descriptif, les cartes affichent le contenu directement sans onglets, le bouton "Ouvrir dans Obsidian" ouvre le fichier .md, le lien audio dans le fichier fonctionne correctement après renommage
+
+---
+
+## 📋 Release 0.9.8 - Découpage Automatique des Fichiers Audio Volumineux
+**Objectif** : Implémenter le découpage automatique des fichiers audio > 25 MB en chunks de moins de 25 MB pour permettre la transcription
+**Description** : Actuellement, les enregistrements longs génèrent des fichiers audio dépassant la limite de 25 MB de l'API OpenAI Whisper, ce qui empêche la transcription. Implémenter un système de découpage automatique des fichiers volumineux en chunks de moins de 25 MB. Détecter la taille du fichier après l'enregistrement et découper automatiquement si nécessaire. Chaque chunk doit être un fichier audio valide et jouable. Sauvegarder les chunks temporaires et les nettoyer après transcription. Gérer les erreurs de découpage et afficher des messages clairs à l'utilisateur.
+**Tests** : Un fichier de plus de 25 MB est automatiquement détecté, le découpage crée des chunks valides de moins de 25 MB, chaque chunk est un fichier audio jouable, les chunks temporaires sont correctement nettoyés après traitement, les erreurs de découpage sont gérées avec des messages clairs, les enregistrements courts (< 25 MB) fonctionnent normalement sans découpage, aucun fichier original n'est perdu ou corrompu
+
+---
+
+## 📋 Release 0.9.9 - Transcription Multi-Chunks et Combinaison
+**Objectif** : Transcribe chaque chunk individuellement et combiner les transcriptions dans l'ordre chronologique
+**Description** : Après le découpage (v0.9.8), implémenter la transcription individuelle de chaque chunk. Chaque chunk est envoyé à l'API OpenAI Whisper séquentiellement pour maintenir l'ordre chronologique. Combiner automatiquement les transcriptions dans le bon ordre pour créer une transcription complète et cohérente. Gérer les cas où un chunk échoue en proposant une retranscription. Afficher la progression de la transcription (chunk X/Y) dans l'interface. S'assurer que la transcription finale est fluide et cohérente malgré les coupures entre chunks.
+**Tests** : Chaque chunk est transcrit individuellement dans l'ordre chronologique, les transcriptions sont combinées correctement sans perte de texte, la transcription finale est complète et cohérente, la progression (chunk X/Y) est affichée dans l'interface, les erreurs de transcription d'un chunk sont gérées avec retry, le résumé est généré à partir de la transcription complète combinée, aucun chunk n'est perdu ou ignoré
+
+---
+
+## 📋 Release 0.9.10 - Interface Utilisateur et Détection Précoce
+**Objectif** : Améliorer l'expérience utilisateur avec une progression visuelle claire et une détection précoce pendant l'enregistrement
+**Description** : Implémenter une interface utilisateur claire pour afficher le processus de découpage et transcription multi-chunks. Afficher la progression visuelle (chunk X/Y, temps estimé, statut). Ajouter une détection précoce de la taille du fichier pendant l'enregistrement pour avertir l'utilisateur si le fichier approche de la limite de 25 MB. Afficher un indicateur de taille en temps réel pendant l'enregistrement. Optionnellement, implémenter une compression audio optimisée pour réduire la taille sans perte de qualité significative si le découpage n'est pas souhaitable.
+**Tests** : La progression visuelle (chunk X/Y) est clairement affichée dans l'interface, l'utilisateur voit le statut de chaque chunk en temps réel, la détection précoce avertit si le fichier approche de 25 MB pendant l'enregistrement, l'indicateur de taille fonctionne en temps réel, les messages d'information sont clairs et compréhensibles, l'expérience utilisateur est fluide même avec plusieurs chunks

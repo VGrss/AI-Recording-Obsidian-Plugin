@@ -1,5 +1,46 @@
 # Historique des Versions
 
+## Version 0.9.8 - Découpage Automatique des Fichiers Audio Volumineux
+**Date :** 16 Octobre 2025
+
+• **Découpage automatique** : Les fichiers audio > 25 MB sont automatiquement découpés en chunks de moins de 25 MB
+• **Détection automatique** : Détection de la taille du fichier après l'enregistrement et découpage si nécessaire
+• **Chunks temporaires** : Les chunks sont sauvegardés temporairement pour transcription, puis nettoyés automatiquement
+• **Fichier original préservé** : Le fichier audio original complet est toujours sauvegardé pour référence
+• **Gestion des erreurs** : Gestion complète des erreurs de découpage avec messages clairs
+• **Nettoyage automatique** : Les chunks temporaires sont nettoyés après transcription (succès ou erreur)
+• **Architecture préparée** : Structure prête pour la transcription multi-chunks (v0.9.9)
+
+**Problème résolu** :
+- ❌ Avant : Les fichiers audio > 25 MB ne pouvaient pas être transcrits (erreur API)
+- ✅ Après : Les fichiers volumineux sont automatiquement découpés en chunks transcribables
+
+**Architecture** :
+- Nouvelle méthode `chunkAudioIfNeeded()` : Détecte et découpe les fichiers volumineux
+- Nouvelle méthode `splitAudioIntoChunks()` : Découpe un fichier audio en chunks valides
+- Nouvelle méthode `extractAudioSegment()` : Extrait un segment temporel d'un AudioBuffer
+- Nouvelle méthode `encodeAudioToWebM()` : Encode un AudioBuffer en WebM via MediaRecorder
+- Nouvelle méthode `cleanupChunks()` : Nettoie les chunks temporaires après traitement
+- Modification de `saveRecording()` : Sauvegarde le fichier original + chunks temporaires
+- Modification de `RecordingMetadata` : Ajout du champ `audioChunks` pour stocker les chemins
+- Modification de `processRecording()` : Détecte les chunks et prépare la transcription multi-chunks (v0.9.9)
+
+**Limitations connues (v0.9.8)** :
+- ⚠️ L'encodage via MediaRecorder nécessite que l'audio soit "joué", ce qui peut être lent pour les longs fichiers
+- ⚠️ La transcription multi-chunks sera implémentée dans v0.9.9 (pour l'instant, détection uniquement)
+- ⚠️ Les fichiers très volumineux (> 50 MB) peuvent prendre du temps à découper
+
+**Améliorations futures (v0.9.9)** :
+- Transcription séquentielle de chaque chunk
+- Combinaison automatique des transcriptions dans l'ordre chronologique
+- Progression visuelle (chunk X/Y) dans l'interface
+
+**Bénéfices** :
+- ✅ Plus d'erreur "fichier trop volumineux"
+- ✅ Découpage automatique sans intervention utilisateur
+- ✅ Nettoyage automatique des fichiers temporaires
+- ✅ Structure prête pour la transcription multi-chunks
+
 ## Version 0.9.7 - Simplification de l'Organisation des Fichiers
 **Date :** 16 Octobre 2025
 

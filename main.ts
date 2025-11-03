@@ -13,6 +13,7 @@ export interface RecordingMetadata {
 	duration: number;
 	status: 'pending' | 'processing' | 'completed' | 'error';
 	audioFile?: string;
+	audioChunks?: string[]; // NOUVEAU v0.9.8 : Chemins des chunks temporaires
 	transcriptFile?: string;
 	summaryFile?: string;
 	segments: Array<{start: number, end: number}>;
@@ -573,18 +574,26 @@ export default class AIRecordingPlugin extends Plugin {
 			const audioFileName = `${baseName}.webm`;
 			const audioPath = `${dateFolder}/${audioFileName}`;
 			
-			// Découper le fichier si nécessaire
-			const audioBlobs = await this.chunkAudioIfNeeded(this.currentRecording.audioBlob);
+			// NOUVEAU v0.9.8 : Sauvegarder le fichier original complet
+			await this.app.vault.createBinary(audioPath, await this.currentRecording.audioBlob!.arrayBuffer());
 			
-			if (audioBlobs.length === 1) {
-				// Fichier unique
-				await this.app.vault.createBinary(audioPath, await audioBlobs[0].arrayBuffer());
-			} else {
-				// Fichiers multiples
+			// Découper le fichier si nécessaire pour transcription (chunks temporaires)
+			const audioBlobs = await this.chunkAudioIfNeeded(this.currentRecording.audioBlob!);
+			
+			let audioChunks: string[] = [];
+			
+			if (audioBlobs.length > 1) {
+				// NOUVEAU v0.9.8 : Fichier volumineux - créer des chunks temporaires pour transcription
+				// Le fichier original complet est déjà sauvegardé ci-dessus
+				// Sauvegarder les chunks temporaires uniquement pour transcription
 				for (let i = 0; i < audioBlobs.length; i++) {
-					const chunkPath = `${dateFolder}/${baseName}_part${i + 1}.webm`;
+					const chunkPath = `${dateFolder}/${baseName}_chunk${i + 1}.webm`;
 					await this.app.vault.createBinary(chunkPath, await audioBlobs[i].arrayBuffer());
+					audioChunks.push(chunkPath);
+					console.log(`Chunk ${i + 1} sauvegardé: ${chunkPath} (${(audioBlobs[i].size / 1024 / 1024).toFixed(2)} MB)`);
 				}
+				
+				new Notice(`Fichier volumineux détecté: ${audioBlobs.length} chunks créés pour transcription`);
 			}
 			
 			// Créer les métadonnées
@@ -595,6 +604,7 @@ export default class AIRecordingPlugin extends Plugin {
 				duration: this.getRecordingDuration(),
 				status: 'completed',
 				audioFile: audioPath,
+				audioChunks: audioChunks.length > 0 ? audioChunks : undefined, // NOUVEAU v0.9.8
 				segments: this.currentRecording.segments,
 				createdAt: Date.now(),
 				updatedAt: Date.now()
@@ -624,6 +634,11 @@ export default class AIRecordingPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * NOUVEAU v0.9.8 : Découpe un fichier audio volumineux en chunks de moins de 25 MB
+	 * @param audioBlob Le blob audio à découper
+	 * @returns Array de blobs audio valides de moins de 25 MB chacun
+	 */
 	async chunkAudioIfNeeded(audioBlob: Blob): Promise<Blob[]> {
 		const maxSize = 25 * 1024 * 1024; // 25MB limite
 		
@@ -631,10 +646,214 @@ export default class AIRecordingPlugin extends Plugin {
 			return [audioBlob];
 		}
 		
-		// Pour l'instant, on retourne le blob entier
-		// TODO: Implémenter le découpage réel des fichiers audio
-		console.warn('Fichier audio volumineux détecté:', audioBlob.size, 'bytes');
-		return [audioBlob];
+		console.log(`Fichier audio volumineux détecté: ${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`);
+		console.log('Démarrage du découpage automatique...');
+		
+		try {
+			// Découper le fichier audio en chunks
+			const chunks = await this.splitAudioIntoChunks(audioBlob, maxSize);
+			console.log(`Fichier découpé en ${chunks.length} chunks`);
+			
+			// Vérifier que chaque chunk est valide
+			for (let i = 0; i < chunks.length; i++) {
+				const chunkSize = chunks[i].size;
+				if (chunkSize > maxSize) {
+					console.warn(`Chunk ${i + 1} dépasse encore la limite: ${(chunkSize / 1024 / 1024).toFixed(2)} MB`);
+				}
+			}
+			
+			return chunks;
+		} catch (error) {
+			console.error('Erreur lors du découpage du fichier audio:', error);
+			new Notice('Erreur lors du découpage du fichier audio. Tentative de transcription du fichier complet...');
+			// En cas d'erreur, retourner le blob entier (l'API échouera mais au moins on essaie)
+			return [audioBlob];
+		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.8 : Découpe un fichier audio en chunks de moins de maxSize
+	 * @param audioBlob Le blob audio à découper
+	 * @param maxSize Taille maximale par chunk en bytes
+	 * @returns Array de blobs audio valides
+	 */
+	async splitAudioIntoChunks(audioBlob: Blob, maxSize: number): Promise<Blob[]> {
+		try {
+			// Créer un contexte audio
+			const audioContext = new AudioContext();
+			
+			// Décoder le fichier audio
+			const arrayBuffer = await audioBlob.arrayBuffer();
+			const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+			
+			console.log(`Audio décodé: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.numberOfChannels} canaux, ${audioBuffer.sampleRate}Hz`);
+			
+			// Calculer la durée par chunk en secondes (approximation basée sur la taille)
+			// Estimation: 1 MB ≈ 1 minute d'audio WebM (approximation)
+			const estimatedBitrate = audioBlob.size / audioBuffer.duration; // bytes par seconde
+			const durationPerChunk = maxSize / estimatedBitrate; // secondes par chunk
+			
+			// S'assurer qu'on ne dépasse pas la durée totale
+			const chunkDuration = Math.min(durationPerChunk, audioBuffer.duration);
+			
+			// Calculer le nombre de chunks nécessaires
+			const numberOfChunks = Math.ceil(audioBuffer.duration / chunkDuration);
+			
+			console.log(`Découpage estimé: ${numberOfChunks} chunks de ~${chunkDuration.toFixed(2)}s chacun`);
+			
+			const chunks: Blob[] = [];
+			
+			// Créer chaque chunk
+			for (let i = 0; i < numberOfChunks; i++) {
+				const startTime = i * chunkDuration;
+				const endTime = Math.min((i + 1) * chunkDuration, audioBuffer.duration);
+				
+				console.log(`Création du chunk ${i + 1}/${numberOfChunks}: ${startTime.toFixed(2)}s - ${endTime.toFixed(2)}s`);
+				
+				// Extraire le segment audio
+				const chunkBuffer = await this.extractAudioSegment(audioBuffer, startTime, endTime, audioContext);
+				
+				// Encoder le segment en WebM
+				const chunkBlob = await this.encodeAudioToWebM(chunkBuffer, audioContext);
+				
+				// Vérifier la taille
+				if (chunkBlob.size > maxSize) {
+					console.warn(`Chunk ${i + 1} trop volumineux: ${(chunkBlob.size / 1024 / 1024).toFixed(2)} MB, division en deux...`);
+					// Si le chunk est encore trop gros, on le divise en deux
+					const halfDuration = (endTime - startTime) / 2;
+					const midTime = startTime + halfDuration;
+					
+					// Premier sous-chunk
+					const chunk1Buffer = await this.extractAudioSegment(audioBuffer, startTime, midTime, audioContext);
+					const chunk1Blob = await this.encodeAudioToWebM(chunk1Buffer, audioContext);
+					chunks.push(chunk1Blob);
+					
+					// Deuxième sous-chunk
+					const chunk2Buffer = await this.extractAudioSegment(audioBuffer, midTime, endTime, audioContext);
+					const chunk2Blob = await this.encodeAudioToWebM(chunk2Buffer, audioContext);
+					chunks.push(chunk2Blob);
+				} else {
+					chunks.push(chunkBlob);
+				}
+			}
+			
+			// Fermer le contexte audio
+			await audioContext.close();
+			
+			console.log(`Découpage terminé: ${chunks.length} chunks créés`);
+			return chunks;
+			
+		} catch (error) {
+			console.error('Erreur lors du découpage:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.8 : Extrait un segment audio d'un AudioBuffer
+	 */
+	async extractAudioSegment(audioBuffer: AudioBuffer, startTime: number, endTime: number, audioContext: AudioContext): Promise<AudioBuffer> {
+		const startSample = Math.floor(startTime * audioBuffer.sampleRate);
+		const endSample = Math.floor(endTime * audioBuffer.sampleRate);
+		const frameCount = endSample - startSample;
+		
+		const segmentBuffer = audioContext.createBuffer(
+			audioBuffer.numberOfChannels,
+			frameCount,
+			audioBuffer.sampleRate
+		);
+		
+		// Copier les données de chaque canal
+		for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+			const channelData = audioBuffer.getChannelData(channel);
+			const segmentData = segmentBuffer.getChannelData(channel);
+			
+			for (let i = 0; i < frameCount; i++) {
+				segmentData[i] = channelData[startSample + i];
+			}
+		}
+		
+		return segmentBuffer;
+	}
+
+	/**
+	 * NOUVEAU v0.9.8 : Encode un AudioBuffer en WebM Blob via MediaRecorder
+	 * Note: Cette méthode nécessite que l'audio soit "joué" pour être enregistré
+	 */
+	async encodeAudioToWebM(audioBuffer: AudioBuffer, audioContext: AudioContext): Promise<Blob> {
+		return new Promise((resolve, reject) => {
+			try {
+				// Créer un MediaStreamDestination pour capturer l'audio
+				const destination = audioContext.createMediaStreamDestination();
+				
+				// Créer un MediaRecorder pour encoder
+				const mediaRecorder = new MediaRecorder(destination.stream, {
+					mimeType: 'audio/webm;codecs=opus'
+				});
+				
+				const chunks: Blob[] = [];
+				let recordingStarted = false;
+				
+				mediaRecorder.ondataavailable = (event) => {
+					if (event.data.size > 0) {
+						chunks.push(event.data);
+					}
+				};
+				
+				mediaRecorder.onstop = () => {
+					if (chunks.length > 0) {
+						const blob = new Blob(chunks, { type: 'audio/webm' });
+						resolve(blob);
+					} else {
+						reject(new Error('Aucune donnée audio enregistrée'));
+					}
+				};
+				
+				mediaRecorder.onerror = (error) => {
+					reject(error);
+				};
+				
+				// Créer un BufferSource pour jouer l'audio
+				const source = audioContext.createBufferSource();
+				source.buffer = audioBuffer;
+				source.connect(destination);
+				
+				// Gérer la fin de lecture
+				source.onended = () => {
+					if (recordingStarted) {
+						// Attendre un peu pour que MediaRecorder finisse d'enregistrer
+						setTimeout(() => {
+							if (mediaRecorder.state !== 'inactive') {
+								mediaRecorder.stop();
+							}
+						}, 100);
+					}
+				};
+				
+				// Démarrer l'enregistrement
+				mediaRecorder.start();
+				recordingStarted = true;
+				
+				// Jouer l'audio
+				source.start(0);
+				
+				// Timeout de sécurité
+				const duration = audioBuffer.duration * 1000;
+				setTimeout(() => {
+					if (mediaRecorder.state !== 'inactive') {
+						mediaRecorder.stop();
+					}
+					try {
+						source.stop();
+					} catch (e) {
+						// Ignorer si déjà arrêté
+					}
+				}, duration + 500); // +500ms de marge
+				
+			} catch (error) {
+				reject(error);
+			}
+		});
 	}
 
 	getRecordingsIndex(): RecordingMetadata[] {
@@ -658,6 +877,11 @@ export default class AIRecordingPlugin extends Plugin {
 				if (audioFile) {
 					await this.app.vault.delete(audioFile);
 				}
+			}
+			
+			// NOUVEAU v0.9.8 : Supprimer aussi les chunks temporaires s'ils existent
+			if (recording.audioChunks && recording.audioChunks.length > 0) {
+				await this.cleanupChunks(recording.audioChunks);
 			}
 			
 			// Supprimer de l'index
@@ -711,6 +935,14 @@ export default class AIRecordingPlugin extends Plugin {
 			await this.saveRecordingsIndex();
 			this.updateSidebar();
 
+			// NOUVEAU v0.9.8 : Vérifier si des chunks existent pour les fichiers volumineux
+			if (recording.audioChunks && recording.audioChunks.length > 0) {
+				console.log(`Fichier volumineux détecté: ${recording.audioChunks.length} chunks disponibles`);
+				console.log('Note: La transcription multi-chunks sera implémentée dans v0.9.9');
+				console.log('Pour l\'instant, tentative de transcription du fichier original complet...');
+				// TODO v0.9.9: Transcribe chaque chunk et combiner les transcriptions
+			}
+
 			// Lire le fichier audio
 			if (!recording.audioFile) {
 				throw new Error('Fichier audio manquant');
@@ -723,6 +955,19 @@ export default class AIRecordingPlugin extends Plugin {
 
 			const audioBuffer = await this.app.vault.readBinary(audioFile);
 			const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+
+			// NOUVEAU v0.9.8 : Vérifier la taille du fichier
+			const maxSize = 25 * 1024 * 1024; // 25 MB
+			if (audioBlob.size > maxSize) {
+				if (recording.audioChunks && recording.audioChunks.length > 0) {
+					console.log(`Fichier volumineux (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB) mais chunks disponibles`);
+					console.log('La transcription multi-chunks sera implémentée dans v0.9.9');
+					// Pour v0.9.8, on essaie quand même de transcrire (l'API échouera proprement)
+					new Notice('Fichier volumineux: La transcription multi-chunks sera disponible dans la prochaine version');
+				} else {
+					throw new Error(`Fichier trop volumineux (${(audioBlob.size / 1024 / 1024).toFixed(2)} MB). Maximum: 25 MB`);
+				}
+			}
 
 			// Effectuer la transcription
 			console.log(`Démarrage de la transcription pour ${recording.title}`);
@@ -784,6 +1029,13 @@ export default class AIRecordingPlugin extends Plugin {
 			await this.saveRecordingsIndex();
 			this.updateSidebar();
 			
+			// NOUVEAU v0.9.8 : Nettoyer les chunks temporaires après transcription réussie
+			if (recording.audioChunks && recording.audioChunks.length > 0) {
+				await this.cleanupChunks(recording.audioChunks);
+				recording.audioChunks = undefined; // Retirer les chunks de l'index
+				await this.saveRecordingsIndex();
+			}
+			
 			new Notice(`Traitement terminé pour ${recording.title}`);
 
 		} catch (error) {
@@ -796,7 +1048,44 @@ export default class AIRecordingPlugin extends Plugin {
 				recording.status = 'error';
 				await this.saveRecordingsIndex();
 				this.updateSidebar();
+				
+				// NOUVEAU v0.9.8 : Nettoyer les chunks temporaires même en cas d'erreur
+				// (pour éviter d'accumuler des fichiers temporaires)
+				if (recording.audioChunks && recording.audioChunks.length > 0) {
+					console.log('Nettoyage des chunks temporaires après erreur...');
+					await this.cleanupChunks(recording.audioChunks).catch(error => {
+						console.error('Erreur lors du nettoyage des chunks:', error);
+					});
+				}
 			}
+		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.8 : Nettoie les chunks temporaires après transcription
+	 * @param chunkPaths Chemins des chunks temporaires à supprimer
+	 */
+	async cleanupChunks(chunkPaths: string[]): Promise<void> {
+		try {
+			console.log(`Nettoyage de ${chunkPaths.length} chunks temporaires...`);
+			
+			for (const chunkPath of chunkPaths) {
+				try {
+					const chunkFile = this.app.vault.getAbstractFileByPath(chunkPath);
+					if (chunkFile && chunkFile instanceof TFile) {
+						await this.app.vault.delete(chunkFile);
+						console.log(`Chunk supprimé: ${chunkPath}`);
+					}
+				} catch (error) {
+					console.warn(`Erreur lors de la suppression du chunk ${chunkPath}:`, error);
+					// Continuer même si un chunk échoue
+				}
+			}
+			
+			console.log('Nettoyage des chunks terminé');
+		} catch (error) {
+			console.error('Erreur lors du nettoyage des chunks:', error);
+			// Ne pas faire échouer le processus si le nettoyage échoue
 		}
 	}
 
