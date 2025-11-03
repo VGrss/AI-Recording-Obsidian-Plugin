@@ -1,5 +1,56 @@
 # Historique des Versions
 
+## Version 0.9.10 - Interface Utilisateur et Détection Précoce
+**Date :** 16 Octobre 2025
+
+• **Détection précoce de la taille** : La taille du fichier est suivie en temps réel pendant l'enregistrement
+• **Indicateur de taille en temps réel** : Affichage de la taille actuelle (KB/MB) pendant l'enregistrement avec codes couleur
+• **Avertissements automatiques** : Notification à 20 MB (80% de la limite) et à 25 MB (limite atteinte)
+• **Progression visuelle améliorée** : Barre de progression, pourcentage et estimation du temps restant pour les chunks
+• **Interface utilisateur enrichie** : Indicateurs visuels clairs avec animations pour les états critiques
+• **Suivi en temps réel** : Mise à jour toutes les 2 secondes de la taille pendant l'enregistrement
+
+**Problème résolu** :
+- ❌ Avant (v0.9.9) : L'utilisateur ne savait pas si son fichier approchait de la limite de 25 MB pendant l'enregistrement
+- ✅ Après (v0.9.10) : L'utilisateur voit la taille en temps réel et est averti si le fichier approche de la limite
+
+**Architecture** :
+- Modification de `currentRecording` : Ajout de `currentSize` et `sizeWarningShown` pour le suivi en temps réel
+- Modification de `setupMediaRecorderEvents()` : Suivi de la taille à chaque événement `dataavailable`
+- Modification de `startNewRecording()` : Utilisation de `timeslice` (2000ms) pour émettre des événements réguliers
+- Nouvelle méthode `updateRecordingSize()` : Met à jour la taille et avertit si nécessaire
+- Nouvelle méthode `getRecordingSize()` : Obtient la taille actuelle en MB
+- Modification de `ai-recording-view.ts` : Ajout de `sizeDisplay` et méthode `updateSizeDisplay()`
+- Amélioration de l'affichage de progression : Barre de progression, pourcentage et estimation du temps restant
+- Nouveaux styles CSS : Indicateurs de taille avec codes couleur (normal, warning, danger)
+
+**Fonctionnement** :
+1. **Pendant l'enregistrement** : MediaRecorder émet des événements `dataavailable` toutes les 2 secondes
+2. **Suivi de la taille** : Chaque événement met à jour `currentSize` et appelle `updateRecordingSize()`
+3. **Affichage en temps réel** : L'indicateur de taille est mis à jour avec codes couleur :
+   - Normal (< 20 MB) : Indicateur bleu avec icône 📊
+   - Warning (≥ 20 MB) : Indicateur jaune avec avertissement
+   - Danger (≥ 25 MB) : Indicateur rouge avec animation pulse
+4. **Avertissements** : Notification automatique à 20 MB et à 25 MB (une seule fois par seuil)
+5. **Progression des chunks** : Barre de progression, pourcentage et estimation du temps restant
+
+**Bénéfices** :
+- ✅ **Transparence** : L'utilisateur voit la taille en temps réel pendant l'enregistrement
+- ✅ **Prévention** : Avertissement précoce si le fichier approche de la limite
+- ✅ **Expérience utilisateur** : Interface claire avec codes couleur et animations
+- ✅ **Progression visuelle** : Barre de progression et estimation du temps pour les chunks
+- ✅ **Rassurance** : L'utilisateur sait que le découpage automatique sera activé si nécessaire
+
+**Codes couleur** :
+- 🔵 **Normal** (< 20 MB) : Indicateur bleu discret
+- 🟡 **Warning** (≥ 20 MB) : Indicateur jaune avec bordure
+- 🔴 **Danger** (≥ 25 MB) : Indicateur rouge avec animation pulse
+
+**Améliorations futures** :
+- Compression audio optimisée pour réduire la taille sans perte de qualité significative
+- Estimation plus précise du temps restant basée sur l'historique des transcriptions
+- Option pour ajuster le seuil d'avertissement (par défaut 20 MB)
+
 ## Version 0.9.9 - Transcription Multi-Chunks et Combinaison
 **Date :** 16 Octobre 2025
 

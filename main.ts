@@ -33,6 +33,9 @@ export default class AIRecordingPlugin extends Plugin {
 		segments: Array<{start: number, end: number}>;
 		audioBlob?: Blob;
 		audioChunks: Blob[];
+		// NOUVEAU v0.9.10 : Taille en temps réel et avertissement
+		currentSize: number;
+		sizeWarningShown: boolean;
 	} | null = null;
 	mediaRecorder: MediaRecorder | null = null;
 	audioStream: MediaStream | null = null;
@@ -257,14 +260,18 @@ export default class AIRecordingPlugin extends Plugin {
 				startTime: new Date(),
 				pausedTime: 0,
 				segments: [],
-				audioChunks: []
+				audioChunks: [],
+				// NOUVEAU v0.9.10 : Initialiser la taille et l'avertissement
+				currentSize: 0,
+				sizeWarningShown: false
 			};
 
 			// Configurer les événements MediaRecorder
 			this.setupMediaRecorderEvents();
 
-			// Démarrer l'enregistrement
-			this.mediaRecorder.start();
+			// NOUVEAU v0.9.10 : Démarrer l'enregistrement avec timeslice pour détection précoce
+			// Émettre un événement dataavailable toutes les 2 secondes pour suivre la taille
+			this.mediaRecorder.start(2000);
 			new Notice('Enregistrement démarré');
 		} catch (error) {
 			console.error('Erreur lors du démarrage de l\'enregistrement:', error);
@@ -279,6 +286,10 @@ export default class AIRecordingPlugin extends Plugin {
 		this.mediaRecorder.ondataavailable = (event) => {
 			if (event.data.size > 0 && this.currentRecording) {
 				this.currentRecording.audioChunks.push(event.data);
+				
+				// NOUVEAU v0.9.10 : Mettre à jour la taille en temps réel
+				this.currentRecording.currentSize += event.data.size;
+				this.updateRecordingSize();
 			}
 		};
 
@@ -436,6 +447,39 @@ export default class AIRecordingPlugin extends Plugin {
 			new Notice('Accès au microphone refusé. Veuillez autoriser l\'accès dans les paramètres du navigateur.');
 			return false;
 		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.10 : Met à jour la taille en temps réel et avertit si nécessaire
+	 */
+	updateRecordingSize() {
+		if (!this.currentRecording || !this.recordingView) return;
+
+		const maxSize = 25 * 1024 * 1024; // 25 MB
+		const warningThreshold = 20 * 1024 * 1024; // 20 MB (80% de la limite)
+		const sizeMB = this.currentRecording.currentSize / (1024 * 1024);
+
+		// Mettre à jour l'affichage de la taille dans l'interface
+		this.recordingView.updateSizeDisplay(sizeMB);
+
+		// Avertir l'utilisateur si la taille approche de la limite
+		if (sizeMB >= 20 && !this.currentRecording.sizeWarningShown) {
+			this.currentRecording.sizeWarningShown = true;
+			new Notice(`⚠️ Taille du fichier: ${sizeMB.toFixed(2)} MB. Le découpage automatique sera activé si > 25 MB.`);
+		}
+
+		// Avertir si la limite est dépassée (ne devrait pas arriver normalement, mais sécurité)
+		if (this.currentRecording.currentSize > maxSize) {
+			new Notice(`⚠️ Fichier volumineux détecté (${sizeMB.toFixed(2)} MB). Le découpage automatique sera activé.`);
+		}
+	}
+
+	/**
+	 * NOUVEAU v0.9.10 : Obtient la taille actuelle de l'enregistrement en MB
+	 */
+	getRecordingSize(): number {
+		if (!this.currentRecording) return 0;
+		return this.currentRecording.currentSize / (1024 * 1024);
 	}
 
 	getRecordingDuration(): number {
