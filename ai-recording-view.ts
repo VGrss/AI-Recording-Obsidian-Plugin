@@ -10,7 +10,6 @@ export class AIRecordingView extends ItemView {
 	historyZone: HTMLElement;
 	stateIndicator: HTMLElement;
 	timerDisplay: HTMLElement;
-	sizeDisplay: HTMLElement; // NOUVEAU v0.9.10 : Indicateur de taille
 	buttonContainer: HTMLElement;
 	historyList: HTMLElement;
 	timerInterval: NodeJS.Timeout | null = null;
@@ -65,10 +64,6 @@ export class AIRecordingView extends ItemView {
 		this.timerDisplay = this.controlZone.createDiv('ai-recording-timer');
 		this.timerDisplay.textContent = '00:00';
 
-		// NOUVEAU v0.9.10 : Indicateur de taille
-		this.sizeDisplay = this.controlZone.createDiv('ai-recording-size');
-		this.sizeDisplay.textContent = '';
-		this.sizeDisplay.style.display = 'none'; // Masqué par défaut
 
 		// Boutons de contrôle
 		this.buttonContainer = this.controlZone.createDiv('ai-recording-buttons');
@@ -288,48 +283,9 @@ export class AIRecordingView extends ItemView {
 		const statusBadge = headerMain.createDiv('ai-recording-status-badge');
 		statusBadge.setAttribute('data-recording-id', recording.id);
 		
-		// NOUVEAU v0.9.10 : Améliorer l'affichage de progression des chunks avec temps estimé
-		if (typeof recording.status === 'string' && recording.status.startsWith('processing_chunk_')) {
-			// Format: processing_chunk_X_Y
-			const match = recording.status.match(/processing_chunk_(\d+)_(\d+)/);
-			if (match) {
-				const currentChunk = parseInt(match[1]);
-				const totalChunks = parseInt(match[2]);
-				const progress = Math.round((currentChunk / totalChunks) * 100);
-				
-				// NOUVEAU v0.9.10 : Estimation du temps restant (approximatif)
-				// Estimation basée sur ~30 secondes par chunk (variable selon la taille)
-				const estimatedTimePerChunk = 30; // secondes
-				const remainingChunks = totalChunks - currentChunk;
-				const estimatedSeconds = remainingChunks * estimatedTimePerChunk;
-				const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-				const estimatedSecondsRemainder = estimatedSeconds % 60;
-				
-				let timeEstimate = '';
-				if (estimatedMinutes > 0) {
-					timeEstimate = ` (~${estimatedMinutes}m${estimatedSecondsRemainder}s restant)`;
-				} else if (estimatedSeconds > 0) {
-					timeEstimate = ` (~${estimatedSeconds}s restant)`;
-				}
-				
-				statusBadge.addClass('ai-recording-status-processing-badge');
-				statusBadge.innerHTML = `
-					<div style="display: flex; align-items: center; gap: 8px;">
-						<span>⏳ Transcription chunk ${currentChunk}/${totalChunks}</span>
-						<div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; height: 4px; overflow: hidden;">
-							<div style="background: var(--interactive-accent); height: 100%; width: ${progress}%; transition: width 0.3s;"></div>
-						</div>
-						<span style="font-size: 0.85em; opacity: 0.8;">${progress}%</span>
-					</div>
-					${timeEstimate ? `<div style="font-size: 0.85em; opacity: 0.7; margin-top: 4px;">${timeEstimate}</div>` : ''}
-				`;
-			} else {
-				statusBadge.addClass('ai-recording-status-processing-badge');
-				statusBadge.textContent = '⏳ Traitement en cours...';
-			}
-		} else if (recording.status === 'processing') {
+		if (recording.status === 'processing') {
 			statusBadge.addClass('ai-recording-status-processing-badge');
-			statusBadge.textContent = '⏳ Traitement en cours...';
+			statusBadge.textContent = `⏳ ${recording.processingStep ?? 'Traitement en cours...'}`;
 		} else if (recording.status === 'error') {
 			statusBadge.addClass('ai-recording-status-error-badge');
 			statusBadge.textContent = '❌ Erreur';
@@ -387,15 +343,22 @@ export class AIRecordingView extends ItemView {
 		openButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
 		openButton.onclick = () => this.openFileInObsidian(recording.transcriptFile);
 
-		// Bouton de retranscription si pas de transcription
-		if (!recording.transcriptFile) {
-			const retranscribeButton = contentActions.createEl('button', { text: '🔄 Transcrire' });
+		const logButton = contentActions.createEl('button', { text: '🧾 Journal' });
+		logButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
+		logButton.title = 'Copier le journal de traitement détaillé (à coller dans un agent IA pour le débogage)';
+		logButton.onclick = async () => {
+			await this.plugin.copyProcessingLog(recording.id);
+		};
+
+		// Bouton de traitement si pas encore de transcription (ou en cas d'erreur)
+		if (!recording.transcriptFile || recording.status === 'error') {
+			const retranscribeButton = contentActions.createEl('button', { text: '🔄 Traiter' });
 			retranscribeButton.addClass('ai-recording-action-btn', 'ai-recording-action-btn-text');
-			retranscribeButton.title = 'Lancer la transcription de cet enregistrement';
+			retranscribeButton.title = 'Lancer la transcription, le résumé et le titre de cet enregistrement';
 			retranscribeButton.onclick = async () => {
-				const confirm = window.confirm('Voulez-vous lancer la transcription de cet enregistrement ?');
+				const confirm = window.confirm('Voulez-vous lancer le traitement de cet enregistrement ?');
 				if (confirm) {
-					await this.plugin.transcribeRecording(recording.id);
+					await this.plugin.processRecording(recording.id);
 				}
 			};
 		}
@@ -532,41 +495,6 @@ export class AIRecordingView extends ItemView {
 		}
 	}
 
-	/**
-	 * NOUVEAU v0.9.10 : Met à jour l'affichage de la taille en temps réel
-	 */
-	updateSizeDisplay(sizeMB: number) {
-		if (!this.sizeDisplay) return;
-
-		const maxSize = 25; // 25 MB
-		const warningThreshold = 20; // 20 MB (80% de la limite)
-
-		// Afficher l'indicateur pendant l'enregistrement
-		const state = this.plugin.getRecordingState();
-		if (state === 'RECORDING' || state === 'PAUSED') {
-			this.sizeDisplay.style.display = 'block';
-			
-			// Formater la taille
-			const sizeText = sizeMB < 1 
-				? `${(sizeMB * 1024).toFixed(0)} KB`
-				: `${sizeMB.toFixed(2)} MB`;
-
-			// Changer la couleur selon la taille
-			if (sizeMB >= maxSize) {
-				this.sizeDisplay.textContent = `⚠️ ${sizeText} (limite atteinte)`;
-				this.sizeDisplay.className = 'ai-recording-size ai-recording-size-danger';
-			} else if (sizeMB >= warningThreshold) {
-				this.sizeDisplay.textContent = `⚠️ ${sizeText} (découpage si > 25 MB)`;
-				this.sizeDisplay.className = 'ai-recording-size ai-recording-size-warning';
-			} else {
-				this.sizeDisplay.textContent = `📊 ${sizeText}`;
-				this.sizeDisplay.className = 'ai-recording-size ai-recording-size-normal';
-			}
-		} else {
-			this.sizeDisplay.style.display = 'none';
-		}
-	}
-
 	addStyles() {
 		const style = document.createElement('style');
 		style.textContent = `
@@ -645,34 +573,6 @@ export class AIRecordingView extends ItemView {
 				margin-bottom: 8px;
 				font-family: monospace;
 			}
-
-			/* NOUVEAU v0.9.10 : Styles pour l'indicateur de taille */
-			.ai-recording-size {
-				font-size: 14px;
-				margin-bottom: 16px;
-				padding: 8px 12px;
-				border-radius: 6px;
-				transition: all 0.3s ease;
-			}
-
-			.ai-recording-size-normal {
-				background: rgba(var(--interactive-accent-rgb), 0.1);
-				color: var(--text-normal);
-			}
-
-			.ai-recording-size-warning {
-				background: rgba(255, 193, 7, 0.15);
-				color: #ffc107;
-				border: 1px solid rgba(255, 193, 7, 0.3);
-			}
-
-			.ai-recording-size-danger {
-				background: rgba(255, 87, 34, 0.15);
-				color: #ff5722;
-				border: 1px solid rgba(255, 87, 34, 0.3);
-				animation: pulse-warning 2s infinite;
-			}
-
 			@keyframes pulse-warning {
 				0%, 100% { opacity: 1; }
 				50% { opacity: 0.7; }
