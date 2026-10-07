@@ -1,14 +1,39 @@
 # AI Recording Obsidian Plugin
 
-Un plugin Obsidian pour l'enregistrement audio avec traitement IA utilisant l'API OpenAI Whisper.
+Un plugin Obsidian pour l'enregistrement audio avec traitement **100% local** : transcription avec Whisper (whisper.cpp) et résumé avec Llama (Ollama). Aucune donnée n'est envoyée dans le cloud.
 
 ## Fonctionnalités
 
 - 🎤 **Enregistrement audio** : Enregistrement audio directement dans Obsidian
-- 🤖 **Transcription IA** : Transcription automatique avec OpenAI Whisper
-- 🌍 **Multi-langues** : Support du français, anglais, espagnol et allemand
-- 💾 **Sauvegarde** : Conservation des fichiers audio et transcriptions
-- ⚙️ **Configuration** : Interface de paramètres intuitive
+- 🤖 **Transcription locale** : Whisper via `whisper-server` (whisper.cpp)
+- 📝 **Résumé et titre locaux** : Llama via Ollama
+- 🧾 **Journal de traitement** : Chaque étape est journalisée (durées, réponses, erreurs) et copiable en un clic pour le débogage
+- 🌍 **Multi-langues** : Auto-détection ou choix de la langue
+- 💾 **Sauvegarde** : Une note Markdown et un fichier audio par enregistrement
+
+## Prérequis (serveurs locaux)
+
+Le plugin est réservé au bureau (macOS, Windows, Linux) : il dialogue avec deux serveurs locaux.
+
+### Whisper (transcription)
+
+```bash
+brew install whisper-cpp
+curl -L -o ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+whisper-server -m ggml-base.bin --host 127.0.0.1 --port 8080
+```
+
+Par défaut le plugin appelle `http://127.0.0.1:8080`. Le modèle se choisit au lancement du serveur (`-m`).
+
+### Ollama + Llama (résumé et titre)
+
+```bash
+brew install ollama
+ollama pull llama3.2:3b
+ollama serve
+```
+
+Par défaut le plugin utilise `http://127.0.0.1:11434` et le modèle `llama3.2:3b`. Pour un meilleur résumé, utilisez par exemple `llama3.1:8b` et indiquez-le dans les paramètres.
 
 ## Installation
 
@@ -25,13 +50,12 @@ Un plugin Obsidian pour l'enregistrement audio avec traitement IA utilisant l'AP
 
 ## Configuration
 
-1. Ouvrez les paramètres du plugin dans Obsidian
-2. Ajoutez votre clé API OpenAI
-3. Configurez vos préférences :
-   - Modèle de transcription (Whisper-1)
-   - Langue de l'audio
-   - Transcription automatique
-   - Sauvegarde des fichiers audio
+Ouvrez les paramètres du plugin dans Obsidian :
+
+- **URL du serveur Whisper** et **langue**
+- **URL d'Ollama**, **modèle Llama** et **longueur du résumé**
+- **Traitement automatique** : transcrire, résumer et titrer dès la fin de l'enregistrement
+- **Conserver le journal de traitement** et bouton **Copier le journal**
 
 ## Utilisation
 
@@ -43,16 +67,17 @@ Un plugin Obsidian pour l'enregistrement audio avec traitement IA utilisant l'AP
 
 ### Résultats
 
-- **Fichiers audio** : Sauvegardés dans votre vault (si activé)
-- **Transcriptions** : Créées automatiquement en fichiers Markdown
+- **Fichier audio** : `Audio - <Titre>.webm` dans le dossier des enregistrements
+- **Note** : `<Titre>.md` avec le lecteur audio, le résumé et la transcription complète
 
-## API OpenAI
+### Journal de traitement (débogage)
 
-Ce plugin utilise l'API OpenAI Whisper pour la transcription. Vous devez :
+Chaque traitement écrit un journal détaillé dans `.obsidian/plugins/ai-recording-plugin/processing-logs/`. Pour déboguer :
 
-1. Créer un compte sur [OpenAI](https://platform.openai.com/)
-2. Générer une clé API
-3. Ajouter la clé dans les paramètres du plugin
+1. Cliquez sur **🧾 Journal** dans la carte de l'enregistrement (ou la commande « Copier le journal du dernier traitement »)
+2. Collez le contenu dans votre agent IA de code
+
+Le journal contient la configuration (sans contenu sensible), chaque étape avec sa durée, les réponses HTTP des serveurs et les erreurs avec leur pile d'appels.
 
 ## Développement
 
